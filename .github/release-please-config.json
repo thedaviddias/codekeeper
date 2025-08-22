@@ -1,5 +1,4 @@
 {
-  "bootstrap-sha": "main",
   "packages": {
     ".": {
       "release-type": "node",
@@ -24,7 +23,8 @@
         "scripts/validation/check-file-complexity.js",
         "scripts/validation/check-jsdoc.js",
         "scripts/validation/check-directory-structure.js",
-        "scripts/validation/check-relative-imports.js"
+        "scripts/validation/check-relative-imports.js",
+        "scripts/validation/check-console-logs.js"
       ]
     },
     "eslint-plugin-codekeeper": {
@@ -44,9 +44,10 @@
       ]
     }
   },
-  "group-pull-request-title-pattern": "chore: release ${component} ${version}",
-  "sequential-calls": true,
-  "draft": false,
-  "prerelease": false,
-  "include-component-in-tag": false
+  "separate-pull-requests": false,
+  "group-pull-request-title-pattern": "chore: release v${version}",
+  "pull-request-title-pattern": "chore: release v${version}",
+  "include-component-in-tag": false,
+  "release-search-depth": 100,
+  "commit-search-depth": 100
 }

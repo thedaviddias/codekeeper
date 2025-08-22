@@ -1,0 +1,267 @@
+name: Test CodeKeeper Validation Scripts
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-primary:
+    name: Test with .nvmrc Node.js version
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js with CodeKeeper
+      uses: ./.github/actions/setup-node
+      with:
+        install-dependencies: 'true'
+
+    - name: Run comprehensive validation tests
+      uses: ./.github/actions/run-validation-tests
+      with:
+        test-type: 'full'
+        upload-results: 'true'
+
+    - name: Test ESLint plugin
+      run: |
+        echo "Testing ESLint plugin..."
+        node test-validation/test-eslint-plugin.js
+
+  test-compatibility:
+    name: Test Node.js Compatibility
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: 'package.json'
+
+    - name: Install dependencies
+      run: |
+        if [ -f "package-lock.json" ]; then
+          echo "📦 Installing dependencies with npm ci..."
+          npm ci --prefer-offline --no-audit
+        elif [ -f "package.json" ]; then
+          echo "📦 Installing dependencies with npm install..."
+          npm install --prefer-offline --no-audit
+        else
+          echo "⚠️ No package.json found, skipping dependency installation"
+        fi
+
+    - name: Run compatibility tests
+      uses: ./.github/actions/run-validation-tests
+      with:
+        test-type: 'quick'
+
+  test-examples:
+    name: Test Example Integrations
+    runs-on: ubuntu-latest
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        example: [nextjs-lefthook-example, react-husky-example]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js with CodeKeeper
+      uses: ./.github/actions/setup-node
+      with:
+        install-dependencies: 'false'  # Will install per example
+
+    - name: Test ${{ matrix.example }}
+      working-directory: examples/${{ matrix.example }}
+      run: |
+        if [ -f package.json ]; then
+          echo "Testing ${{ matrix.example }}..."
+          # Use npm install since examples don't have package-lock.json
+          npm install --prefer-offline --no-audit
+          
+          # Test that validation scripts work in the example
+          echo "Running validation scripts..."
+          if [ -f "scripts/validation/check-as-casts.js" ]; then
+            node scripts/validation/check-as-casts.js --all || echo "AS casts check completed"
+          fi
+          
+          if [ -f "scripts/validation/check-barrel-files.js" ]; then
+            node scripts/validation/check-barrel-files.js || echo "Barrel files check completed"
+          fi
+          
+          if [ -f "scripts/validation/check-file-complexity.js" ]; then
+            node scripts/validation/check-file-complexity.js --report || echo "Complexity check completed"
+          fi
+          
+          if [ -f "scripts/validation/check-directory-structure.js" ]; then
+            node scripts/validation/check-directory-structure.js || echo "Directory structure check completed"
+          fi
+          
+          if [ -f "scripts/validation/check-jsdoc.js" ]; then
+            node scripts/validation/check-jsdoc.js || echo "JSDoc check completed"
+          fi
+          
+          if [ -f "scripts/validation/check-relative-imports.js" ]; then
+            node scripts/validation/check-relative-imports.js src/ || echo "Relative imports check completed"
+          fi
+        else
+          echo "No package.json found in ${{ matrix.example }}, skipping..."
+        fi
+
+  validate-scripts-integrity:
+    name: Validate Scripts Integrity
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js with CodeKeeper
+      uses: ./.github/actions/setup-node
+      with:
+        install-dependencies: 'false'
+
+    - name: Validate all scripts
+      uses: ./.github/actions/validate-scripts
+      with:
+        check-syntax: 'true'
+        check-permissions: 'true'
+        check-configuration: 'true'
+
+  security-check:
+    name: Security & Best Practices Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js with CodeKeeper
+      uses: ./.github/actions/setup-node
+      with:
+        install-dependencies: 'false'
+
+    - name: Check for potential security issues
+      run: |
+        echo "Checking for potential security issues in validation scripts..."
+        
+        # Check for eval() usage
+        if grep -r "eval(" scripts/validation/; then
+          echo "❌ Found eval() usage in validation scripts"
+          exit 1
+        fi
+        
+        # Check for process.exit() without proper error codes
+        if grep -r "process\.exit()" scripts/validation/ | grep -v "process\.exit(0)" | grep -v "process\.exit(1)"; then
+          echo "❌ Found process.exit() with non-standard exit codes"
+          exit 1
+        fi
+        
+        # Check for potential path traversal issues
+        if grep -r "\.\.\/" scripts/validation/ | grep -v "fixtures" | grep -v "examples" | grep -v "test"; then
+          echo "⚠️  Found potential path traversal patterns (review manually)"
+        fi
+        
+        echo "✅ No obvious security issues found"
+
+    - name: Check Node.js compatibility
+      run: |
+        echo "Checking Node.js compatibility..."
+        
+        # Check for modern JavaScript features that might not work in older Node versions
+        if grep -r "(?<=" scripts/validation/; then
+          echo "❌ Found lookbehind regex that requires Node.js 9+"
+        fi
+        
+        # Check for optional chaining
+        if grep -r "?\\." scripts/validation/; then
+          echo "❌ Found optional chaining that requires Node.js 14+"
+        fi
+        
+        # Check for nullish coalescing
+        if grep -r "??" scripts/validation/; then
+          echo "❌ Found nullish coalescing that requires Node.js 14+"
+        fi
+        
+        echo "✅ Node.js compatibility check completed"
+
+  test-lib-sync:
+    name: Test Library Synchronization
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js with CodeKeeper
+      uses: ./.github/actions/setup-node
+      with:
+        install-dependencies: 'false'
+
+    - name: Verify lib/validators sync with ESLint plugin
+      run: |
+        echo "Checking if lib/validators is in sync with ESLint plugin..."
+        
+        # Check if all validator files exist in both locations
+        for file in lib/validators/*.js; do
+          basename=$(basename "$file")
+          eslint_file="eslint-plugin-codekeeper/lib/validators/$basename"
+          
+          if [ ! -f "$eslint_file" ]; then
+            echo "❌ Missing $eslint_file"
+            exit 1
+          fi
+          
+          # Check if files are identical (ignoring whitespace)
+          if ! diff -w "$file" "$eslint_file" > /dev/null; then
+            echo "❌ Files differ: $file vs $eslint_file"
+            echo "Run: cp -r lib/ eslint-plugin-codekeeper/"
+            exit 1
+          fi
+        done
+        
+        echo "✅ lib/validators is in sync with ESLint plugin"
+
+    - name: Test both standalone scripts and ESLint plugin
+      run: |
+        echo "Testing that both approaches detect the same violations..."
+        
+        # Test AS casts
+        echo "Testing AS casts detection..."
+        script_output=$(node scripts/validation/check-as-casts.js test-validation/fixtures/bad-as-casts.tsx 2>&1 | grep -c "as " || true)
+        plugin_output=$(node test-validation/test-eslint-plugin.js 2>&1 | grep -c "no-unsafe-as-casts" || true)
+        
+        if [ "$script_output" -gt 0 ] && [ "$plugin_output" -gt 0 ]; then
+          echo "✅ Both approaches detect AS casts violations"
+        else
+          echo "❌ Detection mismatch: Script=$script_output, Plugin=$plugin_output"
+          exit 1
+        fi
+        
+        # Test barrel files
+        echo "Testing barrel files detection..."
+        script_output=$(node scripts/validation/check-barrel-files.js 2>&1 | grep -c "barrel" || true)
+        
+        if [ "$script_output" -gt 0 ]; then
+          echo "✅ Standalone script detects barrel files"
+        else
+          echo "❌ Standalone script failed to detect barrel files"
+          exit 1
+        fi
+        
+        echo "✅ Both validation approaches are working correctly"

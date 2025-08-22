@@ -1,0 +1,102 @@
+name: 'Setup Node.js with CodeKeeper'
+description: 'Setup Node.js using .nvmrc with optimized caching for CodeKeeper projects'
+
+inputs:
+  install-dependencies:
+    description: 'Whether to install npm dependencies'
+    required: false
+    default: 'true'
+  cache-key-suffix:
+    description: 'Additional suffix for cache key (useful for matrix builds)'
+    required: false
+    default: ''
+
+outputs:
+  node-version:
+    description: 'The Node.js version that was installed'
+    value: ${{ steps.node-version.outputs.version }}
+  cache-hit:
+    description: 'Whether npm cache was hit'
+    value: ${{ steps.npm-cache.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Read Node.js version from .nvmrc
+      id: nvmrc
+      shell: bash
+      run: |
+        if [ -f ".nvmrc" ]; then
+          NODE_VERSION=$(cat .nvmrc)
+          echo "version=$NODE_VERSION" >> $GITHUB_OUTPUT
+          echo "📋 Using Node.js version from .nvmrc: $NODE_VERSION"
+        else
+          echo "⚠️ No .nvmrc found, using default"
+          echo "version=20.x" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Setup Node.js from .nvmrc
+      uses: actions/setup-node@v4
+      with:
+        node-version-file: '.nvmrc'
+        registry-url: 'https://registry.npmjs.org'
+
+    - name: Get npm cache directory
+      if: inputs.install-dependencies == 'true'
+      id: npm-cache-dir
+      shell: bash
+      run: |
+        echo "dir=$(npm config get cache)" >> $GITHUB_OUTPUT
+
+    - name: Cache npm dependencies
+      if: inputs.install-dependencies == 'true'
+      id: npm-cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.npm-cache-dir.outputs.dir }}
+        key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json', '**/package.json') }}${{ inputs.cache-key-suffix }}
+        restore-keys: |
+          ${{ runner.os }}-npm-
+
+    - name: Cache node_modules
+      if: inputs.install-dependencies == 'true'
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: ${{ runner.os }}-node_modules-${{ hashFiles('**/package-lock.json') }}${{ inputs.cache-key-suffix }}
+        restore-keys: |
+          ${{ runner.os }}-node_modules-
+
+    - name: Install dependencies
+      if: inputs.install-dependencies == 'true'
+      shell: bash
+      run: |
+        if [ -f "package-lock.json" ]; then
+          echo "📦 Installing dependencies with npm ci..."
+          npm ci --prefer-offline --no-audit
+        elif [ -f "package.json" ]; then
+          echo "📦 Installing dependencies with npm install..."
+          npm install --prefer-offline --no-audit
+        else
+          echo "⚠️ No package.json found, skipping dependency installation"
+        fi
+
+    - name: Output Node.js version info
+      id: node-version
+      shell: bash
+      run: |
+        NODE_VERSION=$(node --version)
+        NPM_VERSION=$(npm --version)
+        echo "version=$NODE_VERSION" >> $GITHUB_OUTPUT
+        
+        echo "✅ Setup complete:"
+        echo "   Node.js: $NODE_VERSION"
+        echo "   npm: $NPM_VERSION"
+        echo "   Platform: ${{ runner.os }}"
+        
+        # Display cache status
+        if [ "${{ steps.npm-cache.outputs.cache-hit }}" == "true" ]; then
+          echo "   npm cache: ✅ Hit"
+        else
+          echo "   npm cache: ❌ Miss"
+        fi

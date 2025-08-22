@@ -1,0 +1,285 @@
+# CodeKeeper - Git Ignore File
+
+# ============================================================================
+# Node.js Dependencies
+# ============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# ============================================================================
+# Package Manager Files
+# ============================================================================
+# Keep package-lock.json for reproducible builds
+# package-lock.json - uncomment to ignore
+# yarn.lock - uncomment to ignore  
+# pnpm-lock.yaml - uncomment to ignore
+
+# Package manager configs
+.npmrc.local
+.yarnrc.local
+.yarnrc.yml
+
+# ============================================================================
+# Runtime and Temporary Files  
+# ============================================================================
+*.log
+*.pid
+*.seed
+*.pid.lock
+.grunt
+lib-cov
+coverage/
+nyc_output/
+.nyc_output/
+
+# ============================================================================
+# Build Output
+# ============================================================================
+dist/
+build/
+out/
+.output/
+.vercel/
+.netlify/
+.firebase/
+
+# Next.js
+.next/
+.nuxt/
+next-env.d.ts
+
+# Vite
+.vite/
+
+# ============================================================================
+# Environment Variables
+# ============================================================================
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+
+# ============================================================================
+# Cache Directories
+# ============================================================================
+.cache/
+.parcel-cache/
+.turbo/
+.swc/
+.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# ============================================================================
+# Editor and IDE Files
+# ============================================================================
+# VSCode - ignore all except specific files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/codekeeper.code-snippets
+
+# JetBrains IDEs
+.idea/
+*.swp
+*.swo
+
+# Vim
+*~
+.vim/
+.vimrc.local
+
+# Emacs
+.#*
+\#*#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# ============================================================================
+# Operating System Files
+# ============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+
+# ============================================================================
+# Testing
+# ============================================================================
+coverage/
+*.lcov
+.coverage/
+junit.xml
+test-results/
+test-output/
+
+# Jest
+jest-results.json
+
+# Cypress
+cypress/videos/
+cypress/screenshots/
+
+# Playwright
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
+# ============================================================================
+# TypeScript
+# ============================================================================
+*.tsbuildinfo
+.tsbuildinfo
+
+# ============================================================================
+# Linting and Formatting
+# ============================================================================
+.eslintcache
+.stylelintcache
+.prettiercache
+
+# ============================================================================
+# Documentation
+# ============================================================================
+# Ignore generated documentation (but keep source docs/)
+/docs/generated/
+typedoc/
+
+# ============================================================================
+# Security & Auth
+# ============================================================================
+# SSL certificates
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+*.pfx
+
+# Auth tokens and secrets
+auth.json
+secrets.json
+.secrets
+
+# ============================================================================
+# Deployment
+# ============================================================================
+.vercel
+.netlify
+.firebase/
+.serverless/
+.fusebox/
+
+# Heroku
+.env.production
+
+# AWS
+.aws-sam/
+samconfig.toml
+
+# ============================================================================
+# Development Tools
+# ============================================================================
+# Storybook
+storybook-static/
+
+# Bundle analysis
+bundle-analyzer-report.html
+stats.html
+
+# Webpack Bundle Analyzer
+webpack-bundle-analyzer-report.html
+
+# ============================================================================
+# Mobile Development
+# ============================================================================
+# React Native
+.expo/
+.expo-shared/
+
+# ============================================================================
+# Miscellaneous
+# ============================================================================
+*.tgz
+*.tar.gz
+.yarn-integrity
+
+# ============================================================================
+# Project Specific - CodeKeeper
+# ============================================================================
+# Example project builds and dependencies
+/examples/*/node_modules/
+/examples/*/.next/
+/examples/*/dist/
+/examples/*/build/
+/examples/*/.env*
+/examples/*/.turbo/
+
+# Temporary files
+/temp/
+/tmp/
+*.tmp
+
+# Local development overrides
+local.config.js
+dev.config.js
+
+# Generated reports
+/reports/
+validation-report.html
+
+# Backup files  
+*.backup
+*.bak
+*.old
+
+# ============================================================================
+# Keep Important Files (Override above ignores)
+# ============================================================================
+# Keep these files that might otherwise be ignored
+!.nvmrc
+!.gitkeep
+!.github/
+!lefthook.yml
+
+# VSCode settings are handled in the Editor section above
+
+# Keep linting configs
+!.eslintrc.*
+!.prettierrc.*
+
+# Keep example configurations
+!examples/*/package.json
+!examples/*/README.md
+!examples/*/lefthook.yml
+!examples/*/.eslintrc.*
+!examples/*/.prettierrc.*
+!examples/*/tsconfig.json

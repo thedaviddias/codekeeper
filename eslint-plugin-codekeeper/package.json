@@ -1,0 +1,37 @@
+{
+  "name": "@thedaviddias/eslint-plugin-codekeeper",
+  "version": "1.0.0",
+  "description": "ESLint plugin for CodeKeeper AI development guardrails",
+  "main": "index.js",
+  "keywords": [
+    "eslint",
+    "eslintplugin", 
+    "eslint-plugin",
+    "typescript",
+    "react",
+    "ai",
+    "code-quality",
+    "type-safety"
+  ],
+  "author": "David Dias",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thedaviddias/codekeeper.git"
+  },
+  "peerDependencies": {
+    "eslint": ">=8.0.0"
+  },
+  "engines": {
+    "node": ">=20.11.1"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "index.js",
+    "rules/",
+    "lib/",
+    "README.md"
+  ]
+}

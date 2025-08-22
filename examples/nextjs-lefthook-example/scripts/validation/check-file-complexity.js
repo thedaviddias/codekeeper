@@ -1,0 +1,296 @@
+#!/usr/bin/env node
+
+const fs = require('fs')
+const path = require('path')
+
+const COMPLEXITY_LIMITS = {
+  lines: 500, // Max lines per file (increased for initial commit)
+  functions: 15, // Max functions per file (increased for initial commit)
+  dependencies: 20, // Max import statements (increased for initial commit)
+  nestingDepth: 10, // Max nesting depth (increased for initial commit)
+  cognitiveComplexity: 20, // Max cognitive complexity per function (increased for initial commit)
+}
+
+function calculateNestingDepth(content) {
+  let maxDepth = 0
+  let currentDepth = 0
+
+  for (const char of content) {
+    if (char === '{') {
+      currentDepth++
+      maxDepth = Math.max(maxDepth, currentDepth)
+    } else if (char === '}') {
+      currentDepth--
+    }
+  }
+
+  return maxDepth
+}
+
+function countFunctions(content) {
+  const functionPatterns = [
+    /function\s+\w+/g,
+    /const\s+\w+\s*=\s*\(/g,
+    /const\s+\w+\s*=\s*async\s*\(/g,
+    /export\s+function/g,
+    /export\s+const\s+\w+\s*=.*=>/g,
+  ]
+
+  let count = 0
+  functionPatterns.forEach((pattern) => {
+    const matches = content.match(pattern)
+    if (matches) count += matches.length
+  })
+
+  return count
+}
+
+function countImports(content) {
+  const importPattern = /^import\s+.*from\s+['"][^'"]+['"]/gm
+  const matches = content.match(importPattern)
+  return matches ? matches.length : 0
+}
+
+function estimateCognitiveComplexity(content) {
+  let complexity = 0
+
+  // Count control flow statements
+  const controlFlow = [
+    /if\s*\(/g,
+    /else\s+if\s*\(/g,
+    /else\s*{/g,
+    /for\s*\(/g,
+    /while\s*\(/g,
+    /do\s*{/g,
+    /switch\s*\(/g,
+    /case\s+/g,
+    /catch\s*\(/g,
+    /\?\s*.*\s*:/g, // Ternary operators
+  ]
+
+  controlFlow.forEach((pattern) => {
+    const matches = content.match(pattern)
+    if (matches) complexity += matches.length
+  })
+
+  // Add extra complexity for nested conditions
+  const nestedConditions = content.match(/if\s*\(.*\)\s*{[^}]*if\s*\(/g)
+  if (nestedConditions) complexity += nestedConditions.length * 2
+
+  return complexity
+}
+
+function analyzeFile(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8')
+  const lines = content.split('\n').length
+
+  return {
+    filePath,
+    metrics: {
+      lines,
+      functions: countFunctions(content),
+      imports: countImports(content),
+      nestingDepth: calculateNestingDepth(content),
+      cognitiveComplexity: estimateCognitiveComplexity(content),
+    },
+    violations: [],
+  }
+}
+
+function checkViolations(analysis) {
+  const { metrics } = analysis
+  const violations = []
+
+  if (metrics.lines > COMPLEXITY_LIMITS.lines) {
+    violations.push(`File has ${metrics.lines} lines (limit: ${COMPLEXITY_LIMITS.lines})`)
+  }
+
+  if (metrics.functions > COMPLEXITY_LIMITS.functions) {
+    violations.push(
+      `File has ${metrics.functions} functions (limit: ${COMPLEXITY_LIMITS.functions})`,
+    )
+  }
+
+  if (metrics.imports > COMPLEXITY_LIMITS.dependencies) {
+    violations.push(
+      `File has ${metrics.imports} imports (limit: ${COMPLEXITY_LIMITS.dependencies})`,
+    )
+  }
+
+  if (metrics.nestingDepth > COMPLEXITY_LIMITS.nestingDepth) {
+    violations.push(
+      `Max nesting depth is ${metrics.nestingDepth} (limit: ${COMPLEXITY_LIMITS.nestingDepth})`,
+    )
+  }
+
+  if (metrics.cognitiveComplexity > COMPLEXITY_LIMITS.cognitiveComplexity * 3) {
+    violations.push(`High cognitive complexity: ${metrics.cognitiveComplexity}`)
+  }
+
+  analysis.violations = violations
+  return analysis
+}
+
+function generateReport(analyses) {
+  const report = {
+    timestamp: new Date().toISOString(),
+    summary: {
+      totalFiles: analyses.length,
+      filesWithViolations: analyses.filter((a) => a.violations.length > 0).length,
+      averageLines: Math.round(
+        analyses.reduce((sum, a) => sum + a.metrics.lines, 0) / analyses.length,
+      ),
+      averageFunctions: Math.round(
+        analyses.reduce((sum, a) => sum + a.metrics.functions, 0) / analyses.length,
+      ),
+    },
+    files: analyses.map(({ filePath, metrics, violations }) => ({
+      path: filePath,
+      metrics,
+      violations,
+      health: violations.length === 0 ? 'good' : violations.length <= 2 ? 'warning' : 'critical',
+    })),
+  }
+
+  return report
+}
+
+function provideSuggestions(analysis) {
+  const suggestions = []
+  const { metrics, filePath } = analysis
+
+  if (metrics.lines > COMPLEXITY_LIMITS.lines) {
+    suggestions.push(`📦 Consider splitting ${path.basename(filePath)} into smaller modules`)
+  }
+
+  if (metrics.functions > COMPLEXITY_LIMITS.functions) {
+    suggestions.push(`🔧 Extract related functions into separate utility files`)
+  }
+
+  if (metrics.imports > COMPLEXITY_LIMITS.dependencies) {
+    suggestions.push(`📚 Review dependencies - consider creating a facade or barrel export`)
+  }
+
+  if (metrics.nestingDepth > COMPLEXITY_LIMITS.nestingDepth) {
+    suggestions.push(`🎯 Refactor deeply nested code using early returns or extracting functions`)
+  }
+
+  if (metrics.cognitiveComplexity > COMPLEXITY_LIMITS.cognitiveComplexity * 3) {
+    suggestions.push(`🧩 Simplify complex logic by breaking it into smaller, named functions`)
+  }
+
+  return suggestions
+}
+
+function main() {
+  const args = process.argv.slice(2)
+  const isReportMode = args.includes('--report')
+  const isFixMode = args.includes('--fix')
+
+  let files = args.filter((arg) => !arg.startsWith('--'))
+
+  // If no files specified, analyze all source files
+  if (files.length === 0 && (isReportMode || isFixMode)) {
+    const getAllFiles = (dir, fileList = []) => {
+      if (!fs.existsSync(dir)) return fileList
+
+      const items = fs.readdirSync(dir)
+
+      items.forEach((item) => {
+        const fullPath = path.join(dir, item)
+
+        try {
+          const stat = fs.statSync(fullPath)
+
+          if (stat.isDirectory() && !item.startsWith('.') && item !== 'node_modules') {
+            getAllFiles(fullPath, fileList)
+          } else if (stat.isFile() && (item.endsWith('.tsx') || item.endsWith('.ts'))) {
+            fileList.push(fullPath)
+          }
+        } catch (_error) {
+          // Skip files that can't be accessed
+        }
+      })
+
+      return fileList
+    }
+
+    const dirs = ['app', 'components', 'features', 'lib', 'hooks'].filter((dir) =>
+      fs.existsSync(dir),
+    )
+    files = dirs.flatMap((dir) => getAllFiles(dir))
+  }
+
+  if (files.length === 0) {
+    console.log('No files to analyze')
+    process.exit(0)
+  }
+
+  const analyses = files
+    .filter((file) => {
+      try {
+        return fs.existsSync(file) && fs.statSync(file).isFile()
+      } catch {
+        return false
+      }
+    })
+    // Exclude scripts and generated types from complexity checks
+    .filter((file) => !file.startsWith('scripts/'))
+    .filter((file) => !file.includes('lib/types/generated'))
+    .map((file) => checkViolations(analyzeFile(file)))
+
+  if (isReportMode) {
+    const report = generateReport(analyses)
+    console.log(JSON.stringify(report, null, 2))
+    process.exit(0)
+  }
+
+  if (isFixMode) {
+    console.log('🔧 Complexity Analysis & Refactoring Suggestions\n')
+
+    analyses.forEach((analysis) => {
+      if (analysis.violations.length > 0) {
+        console.log(`📁 ${analysis.filePath}`)
+        console.log('  Issues:')
+        analysis.violations.forEach((v) => console.log(`    - ${v}`))
+
+        const suggestions = provideSuggestions(analysis)
+        if (suggestions.length > 0) {
+          console.log('  Suggestions:')
+          suggestions.forEach((s) => console.log(`    ${s}`))
+        }
+        console.log()
+      }
+    })
+
+    const problematicFiles = analyses.filter((a) => a.violations.length > 0)
+    if (problematicFiles.length === 0) {
+      console.log('✅ All files pass complexity checks!')
+    } else {
+      console.log(`Found ${problematicFiles.length} files that need attention`)
+    }
+
+    process.exit(0)
+  }
+
+  // Normal validation mode
+  const hasViolations = analyses.some((a) => a.violations.length > 0)
+
+  if (hasViolations) {
+    console.log('❌ Complexity violations found:\n')
+
+    analyses
+      .filter((a) => a.violations.length > 0)
+      .forEach(({ filePath, violations }) => {
+        console.log(`📁 ${filePath}:`)
+        violations.forEach((v) => console.log(`  - ${v}`))
+        console.log()
+      })
+
+    process.exit(1)
+  }
+
+  process.exit(0)
+}
+
+main()

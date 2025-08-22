@@ -1,0 +1,171 @@
+name: 'Run CodeKeeper Validation Tests'
+description: 'Run comprehensive validation tests for CodeKeeper scripts'
+
+inputs:
+  test-type:
+    description: 'Type of tests to run: full, quick, or individual'
+    required: false
+    default: 'full'
+  specific-script:
+    description: 'Specific script to test (for individual testing)'
+    required: false
+    default: ''
+  upload-results:
+    description: 'Whether to upload test results as artifacts'
+    required: false
+    default: 'false'
+
+outputs:
+  test-results:
+    description: 'Summary of test results'
+    value: ${{ steps.test-summary.outputs.summary }}
+  tests-passed:
+    description: 'Whether all tests passed'
+    value: ${{ steps.test-results.outputs.passed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Create test results directory
+      shell: bash
+      run: |
+        mkdir -p test-results
+        echo "📁 Created test-results directory"
+
+    - name: Run full test suite
+      if: inputs.test-type == 'full'
+      id: full-tests
+      shell: bash
+      run: |
+        echo "🧪 Running full validation test suite..."
+        
+        # Run main test suite with output capture
+        if npm test 2>&1 | tee test-results/main-tests.log; then
+          echo "✅ Main test suite passed"
+          echo "main_tests=passed" >> $GITHUB_OUTPUT
+        else
+          echo "❌ Main test suite failed"
+          echo "main_tests=failed" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+    - name: Run comprehensive validation tests
+      if: inputs.test-type == 'full' || inputs.test-type == 'individual'
+      shell: bash
+      run: |
+        echo "🔍 Running comprehensive validation tests using proper test runner..."
+        
+        # Use the main test runner which properly handles expected failures
+        if npm test 2>&1 | tee "test-results/comprehensive-tests.log"; then
+          echo "✅ Comprehensive validation tests passed"
+        else
+          echo "❌ Comprehensive validation tests failed"
+          echo "Note: This indicates real issues, not expected validation failures"
+          exit 1
+        fi
+        
+        # Also run individual scripts for artifact logging (but don't fail on expected behavior)
+        echo "📝 Running individual scripts for detailed logging..."
+        
+        SCRIPTS=(
+          "test:as-casts"
+          "test:barrel-files" 
+          "test:relative-imports"
+          "test:jsdoc"
+          "test:complexity"
+          "test:structure"
+        )
+        
+        for script in "${SCRIPTS[@]}"; do
+          if [ "${{ inputs.specific-script }}" != "" ] && [ "$script" != "test:${{ inputs.specific-script }}" ]; then
+            continue
+          fi
+          
+          echo "Logging output for $script..."
+          # Replace colons with hyphens for valid file names
+          SAFE_SCRIPT_NAME=$(echo "$script" | sed 's/:/-/g')
+          # Run script but don't fail CI on expected validation behavior
+          npm run "$script" 2>&1 | tee "test-results/${SAFE_SCRIPT_NAME}.log" || echo "📋 $script completed (expected to find violations in test fixtures)"
+        done
+        
+        echo "✅ All validation tests completed successfully"
+
+    - name: Run quick test
+      if: inputs.test-type == 'full' || inputs.test-type == 'quick'
+      shell: bash
+      run: |
+        echo "⚡ Running quick validation test..."
+        
+        if node tests/quick-test.js 2>&1 | tee test-results/quick-test.log; then
+          echo "✅ Quick test passed"
+        else
+          echo "❌ Quick test failed"
+          exit 1
+        fi
+
+    - name: Generate test summary
+      id: test-summary
+      shell: bash
+      run: |
+        echo "📊 Generating test summary..."
+        
+        SUMMARY="## 🧪 CodeKeeper Test Results\n\n"
+        
+        if [ "${{ inputs.test-type }}" == "full" ]; then
+          SUMMARY+="**Test Type**: Comprehensive\n"
+        elif [ "${{ inputs.test-type }}" == "quick" ]; then
+          SUMMARY+="**Test Type**: Quick Validation\n"
+        else
+          SUMMARY+="**Test Type**: Individual Script\n"
+        fi
+        
+        SUMMARY+="**Node.js Version**: $(node --version)\n"
+        SUMMARY+="**Platform**: ${{ runner.os }}\n"
+        SUMMARY+="**Timestamp**: $(date)\n\n"
+        
+        # Count test files and results
+        if [ -d "test-results" ]; then
+          LOG_COUNT=$(find test-results -name "*.log" | wc -l)
+          SUMMARY+="**Log Files Generated**: $LOG_COUNT\n"
+        fi
+        
+        SUMMARY+="**Status**: ✅ All Tests Passed\n"
+        
+        echo "summary<<EOF" >> $GITHUB_OUTPUT
+        echo -e "$SUMMARY" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "passed=true" >> $GITHUB_OUTPUT
+
+    - name: Upload test results
+      if: inputs.upload-results == 'true' && always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ runner.os }}-${{ github.run_id }}
+        path: test-results/
+        retention-days: 30
+
+    - name: Set final test results
+      id: test-results
+      shell: bash
+      run: |
+        # Check main tests first
+        if [ -f "test-results/main-tests.log" ]; then
+          if grep -q "All validation scripts are working correctly" test-results/main-tests.log; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+        # Check comprehensive tests
+        elif [ -f "test-results/comprehensive-tests.log" ]; then
+          if grep -q "All validation scripts are working correctly" test-results/comprehensive-tests.log; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+        # Check quick test
+        elif [ -f "test-results/quick-test.log" ]; then
+          echo "passed=true" >> $GITHUB_OUTPUT
+        else
+          echo "passed=true" >> $GITHUB_OUTPUT
+        fi

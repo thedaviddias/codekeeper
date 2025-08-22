@@ -1,0 +1,42 @@
+# <type>[optional scope]: <description>
+# |<----  Using a Maximum Of 50 Characters  ---->|
+
+# Explain why this change is being made
+# |<----   Try To Limit Each Line to a Maximum Of 72 Characters   ---->|
+
+# Provide links or keys to any relevant tickets, articles or other resources
+# Use issues and merge requests' full URLs instead of short links
+
+# --- COMMIT END ---
+# Type can be 
+#    feat     (new feature)
+#    fix      (bug fix)
+#    refactor (refactoring production code)
+#    style    (formatting, missing semi colons, etc; no code change)
+#    docs     (changes to documentation)
+#    test     (adding or refactoring tests; no production code change)
+#    chore    (updating grunt tasks etc; no production code change)
+#    perf     (performance improvements)
+#    ci       (continuous integration changes)
+#    build    (build system changes)
+#    revert   (revert a previous commit)
+#
+# Scope can be:
+#    scripts  (validation scripts)
+#    eslint   (ESLint plugin)
+#    examples (example projects)  
+#    ci       (GitHub Actions)
+#    docs     (documentation)
+#
+# Breaking changes: Add ! after type or add BREAKING CHANGE: in footer
+# Examples:
+#   feat!: remove support for Node 16
+#   feat(scripts): add new validation rule
+#   fix(eslint): correct plugin loading issue
+#   docs: update installation instructions
+#
+# Remember:
+# - Use the imperative mood ("add" not "added") 
+# - Don't capitalize the first letter of the description
+# - Don't end the description with a period
+# - Releases are automatic when you merge to main!

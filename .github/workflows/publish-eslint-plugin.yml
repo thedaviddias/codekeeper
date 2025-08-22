@@ -1,0 +1,150 @@
+name: Manual ESLint Plugin Publish
+
+# This workflow is for manual publishing only
+# Automatic publishing happens via release-please.yml
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.0.0)'
+        required: true
+        type: string
+      force:
+        description: 'Force publish even if version exists'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          install-dependencies: 'false'
+      
+      - name: Validate ESLint plugin before publishing
+        run: |
+          echo "Validating ESLint plugin structure and functionality..."
+          
+          # Check that all required files exist
+          required_files=(
+            "eslint-plugin-codekeeper/package.json"
+            "eslint-plugin-codekeeper/index.js"
+            "eslint-plugin-codekeeper/README.md"
+            "eslint-plugin-codekeeper/lib/validators/as-casts.js"
+            "eslint-plugin-codekeeper/lib/validators/barrel-files.js"
+            "eslint-plugin-codekeeper/lib/validators/file-complexity.js"
+            "eslint-plugin-codekeeper/lib/validators/jsdoc.js"
+            "eslint-plugin-codekeeper/rules/no-unsafe-as-casts.js"
+            "eslint-plugin-codekeeper/rules/no-barrel-files.js"
+            "eslint-plugin-codekeeper/rules/max-file-complexity.js"
+            "eslint-plugin-codekeeper/rules/require-jsdoc.js"
+          )
+          
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "❌ Missing required file: $file"
+              exit 1
+            fi
+          done
+          
+          echo "✅ All required files present"
+          
+          # Test that plugin can be loaded
+          echo "Testing plugin loading..."
+          cd eslint-plugin-codekeeper
+          node -e "
+            const plugin = require('./index.js');
+            if (!plugin.meta || !plugin.rules || !plugin.configs) {
+              console.log('❌ Plugin structure invalid');
+              process.exit(1);
+            }
+            const requiredRules = ['no-unsafe-as-casts', 'no-barrel-files', 'max-file-complexity', 'require-jsdoc'];
+            for (const rule of requiredRules) {
+              if (!plugin.rules[rule]) {
+                console.log(\`❌ Missing rule: \${rule}\`);
+                process.exit(1);
+              }
+            }
+            console.log('✅ Plugin structure valid');
+          "
+          cd ..
+          
+          # Test ESLint rules functionality
+          echo "Testing ESLint rules..."
+          node test-validation/test-eslint-plugin.js
+          
+          echo "✅ ESLint plugin validation complete"
+      
+      - name: Ensure lib/validators is synced
+        run: |
+          echo "Ensuring lib/validators is synced with ESLint plugin..."
+          cp -r lib/ eslint-plugin-codekeeper/
+          
+          # Check if there are any differences
+          if git diff --name-only | grep eslint-plugin-codekeeper; then
+            echo "Updated ESLint plugin validators from lib/"
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add eslint-plugin-codekeeper/lib/
+            git commit -m "Auto-sync: Update ESLint plugin validators from lib/"
+          else
+            echo "✅ ESLint plugin validators already in sync"
+          fi
+      
+      - name: Update version
+        working-directory: ./eslint-plugin-codekeeper
+        run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
+      
+      - name: Authenticate to GitHub Packages
+        run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+      
+      - name: Publish to GitHub Packages
+        working-directory: ./eslint-plugin-codekeeper
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: 'eslint-plugin-v${{ github.event.inputs.version }}',
+              name: 'ESLint Plugin v${{ github.event.inputs.version }}',
+              body: `## ESLint Plugin CodeKeeper Release
+            
+            ### Rules Included:
+            - \`no-unsafe-as-casts\`: Prevents dangerous TypeScript \`as\` casts
+            - \`no-barrel-files\`: Warns against barrel files that harm tree-shaking
+            - \`max-file-complexity\`: Enforces file complexity limits
+            - \`require-jsdoc\`: Requires JSDoc comments for functions and classes
+            
+            ### Installation:
+            \`\`\`bash
+            npm install @thedaviddias/eslint-plugin-codekeeper
+            \`\`\`
+            
+            ### Usage:
+            \`\`\`javascript
+            // .eslintrc.js
+            module.exports = {
+              plugins: ['@thedaviddias/codekeeper'],
+              extends: ['plugin:@thedaviddias/codekeeper/recommended']
+            };
+            \`\`\``,
+              draft: false,
+              prerelease: false
+            });
+            console.log('✅ ESLint plugin GitHub release created');

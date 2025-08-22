@@ -1,0 +1,52 @@
+{
+  "bootstrap-sha": "main",
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "package-name": "codekeeper-guardrails",
+      "changelog-sections": [
+        {"type": "feat", "section": "✨ Features"},
+        {"type": "fix", "section": "🐛 Bug Fixes"},
+        {"type": "perf", "section": "⚡ Performance Improvements"},
+        {"type": "revert", "section": "🔄 Reverts"},
+        {"type": "docs", "section": "📚 Documentation"},
+        {"type": "style", "section": "💄 Styles"},
+        {"type": "refactor", "section": "♻️ Code Refactoring"},
+        {"type": "test", "section": "✅ Tests"},
+        {"type": "build", "section": "🏗️ Build System"},
+        {"type": "ci", "section": "⚙️ Continuous Integration"},
+        {"type": "chore", "section": "🧹 Chores", "hidden": true}
+      ],
+      "extra-files": [
+        "README.md",
+        "scripts/validation/check-as-casts.js",
+        "scripts/validation/check-barrel-files.js", 
+        "scripts/validation/check-file-complexity.js",
+        "scripts/validation/check-jsdoc.js",
+        "scripts/validation/check-directory-structure.js",
+        "scripts/validation/check-relative-imports.js"
+      ]
+    },
+    "eslint-plugin-codekeeper": {
+      "release-type": "node",
+      "package-name": "@thedaviddias/eslint-plugin-codekeeper",
+      "changelog-sections": [
+        {"type": "feat", "section": "✨ Features"},
+        {"type": "fix", "section": "🐛 Bug Fixes"},
+        {"type": "perf", "section": "⚡ Performance Improvements"},
+        {"type": "docs", "section": "📚 Documentation"},
+        {"type": "refactor", "section": "♻️ Code Refactoring"},
+        {"type": "test", "section": "✅ Tests"},
+        {"type": "chore", "section": "🧹 Chores", "hidden": true}
+      ],
+      "extra-files": [
+        "README.md"
+      ]
+    }
+  },
+  "group-pull-request-title-pattern": "chore: release ${component} ${version}",
+  "sequential-calls": true,
+  "draft": false,
+  "prerelease": false,
+  "include-component-in-tag": false
+}

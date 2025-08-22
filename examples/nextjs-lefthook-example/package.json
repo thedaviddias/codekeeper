@@ -1,0 +1,36 @@
+{
+  "name": "codekeeper-nextjs-lefthook-example",
+  "version": "1.0.0",
+  "description": "Example Next.js project with CodeKeeper and Lefthook",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint --fix",
+    "lint:check": "next lint",
+    "validate:types": "node scripts/validation/check-as-casts.js",
+    "validate:complexity": "node scripts/validation/check-file-complexity.js",
+    "validate:docs": "node scripts/validation/check-jsdoc.js",
+    "validate:barrel": "node scripts/validation/check-barrel-files.js",
+    "test-codekeeper": "npm run lint:check && npm run validate:types && npm run validate:complexity",
+    "demo:problems": "echo 'This will show you the problems CodeKeeper catches:' && npm run test-codekeeper",
+    "demo:fix": "echo 'Auto-fixing with ESLint...' && npm run lint"
+  },
+  "dependencies": {
+    "next": "14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8",
+    "eslint-config-next": "14.0.0",
+    "lefthook": "^1.5.0",
+    "typescript": "^5"
+  }
+}

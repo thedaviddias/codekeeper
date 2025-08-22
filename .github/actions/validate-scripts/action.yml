@@ -1,0 +1,192 @@
+name: 'Validate CodeKeeper Scripts'
+description: 'Validate syntax, permissions, and integrity of validation scripts'
+
+inputs:
+  check-syntax:
+    description: 'Whether to check JavaScript syntax'
+    required: false
+    default: 'true'
+  check-permissions:
+    description: 'Whether to check and fix file permissions'
+    required: false
+    default: 'true'
+  check-configuration:
+    description: 'Whether to validate configuration sections'
+    required: false
+    default: 'true'
+
+outputs:
+  validation-results:
+    description: 'Results of script validation'
+    value: ${{ steps.validation-summary.outputs.results }}
+  issues-found:
+    description: 'Number of issues found'
+    value: ${{ steps.validation-summary.outputs.issues }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check script syntax
+      if: inputs.check-syntax == 'true'
+      shell: bash
+      run: |
+        echo "🔍 Checking JavaScript syntax for all validation scripts..."
+        
+        SYNTAX_ERRORS=0
+        
+        for script in scripts/validation/*.js; do
+          if [ -f "$script" ]; then
+            echo "Checking syntax: $script"
+            if node -c "$script"; then
+              echo "✅ $script syntax OK"
+            else
+              echo "❌ $script has syntax errors"
+              SYNTAX_ERRORS=$((SYNTAX_ERRORS + 1))
+            fi
+          fi
+        done
+        
+        if [ $SYNTAX_ERRORS -gt 0 ]; then
+          echo "❌ Found $SYNTAX_ERRORS syntax errors"
+          exit 1
+        else
+          echo "✅ All scripts have valid syntax"
+        fi
+
+    - name: Check and fix file permissions
+      if: inputs.check-permissions == 'true'
+      shell: bash
+      run: |
+        echo "🔐 Checking file permissions for validation scripts..."
+        
+        PERMISSION_FIXES=0
+        
+        for script in scripts/validation/*.js; do
+          if [ -f "$script" ]; then
+            if [ ! -x "$script" ]; then
+              echo "🔧 Making $script executable..."
+              chmod +x "$script"
+              PERMISSION_FIXES=$((PERMISSION_FIXES + 1))
+            else
+              echo "✅ $script is executable"
+            fi
+          fi
+        done
+        
+        if [ $PERMISSION_FIXES -gt 0 ]; then
+          echo "🔧 Fixed permissions for $PERMISSION_FIXES files"
+        else
+          echo "✅ All files have correct permissions"
+        fi
+
+    - name: Validate configuration sections
+      if: inputs.check-configuration == 'true'
+      shell: bash
+      run: |
+        echo "⚙️ Checking configuration sections in validation scripts..."
+        
+        MISSING_CONFIG=0
+        
+        for script in scripts/validation/*.js; do
+          if [ -f "$script" ]; then
+            script_name=$(basename "$script")
+            echo "Checking configuration in $script_name..."
+            
+            if grep -q "CONFIGURATION.*Customize these settings" "$script"; then
+              echo "✅ $script_name has configuration section"
+            else
+              echo "❌ $script_name missing configuration section"
+              MISSING_CONFIG=$((MISSING_CONFIG + 1))
+            fi
+          fi
+        done
+        
+        if [ $MISSING_CONFIG -gt 0 ]; then
+          echo "❌ $MISSING_CONFIG scripts missing configuration sections"
+          exit 1
+        else
+          echo "✅ All scripts have proper configuration sections"
+        fi
+
+    - name: Verify script completeness
+      shell: bash
+      run: |
+        echo "📋 Verifying all expected validation scripts are present..."
+        
+        EXPECTED_SCRIPTS=(
+          "check-as-casts.js"
+          "check-barrel-files.js"
+          "check-relative-imports.js"
+          "check-jsdoc.js"
+          "check-file-complexity.js"
+          "check-directory-structure.js"
+        )
+        
+        MISSING_SCRIPTS=()
+        
+        for script in "${EXPECTED_SCRIPTS[@]}"; do
+          if [ -f "scripts/validation/$script" ]; then
+            echo "✅ $script found"
+          else
+            echo "❌ $script missing"
+            MISSING_SCRIPTS+=("$script")
+          fi
+        done
+        
+        if [ ${#MISSING_SCRIPTS[@]} -gt 0 ]; then
+          echo "❌ Missing scripts: ${MISSING_SCRIPTS[*]}"
+          exit 1
+        else
+          echo "✅ All expected scripts are present"
+        fi
+
+    - name: Check npm script consistency
+      shell: bash
+      run: |
+        echo "📦 Checking npm scripts for each validation script..."
+        
+        MISSING_NPM_SCRIPTS=()
+        
+        for script in scripts/validation/check-*.js; do
+          if [ -f "$script" ]; then
+            script_base=$(basename "$script" .js)
+            npm_script="test:$(echo $script_base | sed 's/check-//')"
+            
+            if grep -q "\"$npm_script\"" package.json; then
+              echo "✅ npm script '$npm_script' exists"
+            else
+              echo "❌ npm script '$npm_script' missing"
+              MISSING_NPM_SCRIPTS+=("$npm_script")
+            fi
+          fi
+        done
+        
+        if [ ${#MISSING_NPM_SCRIPTS[@]} -gt 0 ]; then
+          echo "❌ Missing npm scripts: ${MISSING_NPM_SCRIPTS[*]}"
+          exit 1
+        else
+          echo "✅ All npm scripts are present"
+        fi
+
+    - name: Generate validation summary
+      id: validation-summary
+      shell: bash
+      run: |
+        echo "📊 Generating validation summary..."
+        
+        SCRIPT_COUNT=$(find scripts/validation -name "*.js" | wc -l)
+        
+        RESULTS="## 🔍 Script Validation Results\n\n"
+        RESULTS+="**Scripts Validated**: $SCRIPT_COUNT\n"
+        RESULTS+="**Syntax Check**: ✅ Passed\n"
+        RESULTS+="**Permissions**: ✅ Correct\n"
+        RESULTS+="**Configuration**: ✅ Present\n"
+        RESULTS+="**Completeness**: ✅ All scripts found\n"
+        RESULTS+="**npm Scripts**: ✅ All present\n"
+        
+        echo "results<<EOF" >> $GITHUB_OUTPUT
+        echo -e "$RESULTS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        
+        echo "issues=0" >> $GITHUB_OUTPUT
+        echo "✅ All validations passed"

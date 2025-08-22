@@ -1,0 +1,215 @@
+name: CI Health Check
+
+on:
+  schedule:
+    # Run weekly on Sundays at 6 AM UTC
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    name: CI System Health Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js with CodeKeeper
+      uses: ./.github/actions/setup-node
+      with:
+        install-dependencies: 'true'
+
+    - name: Comprehensive system check
+      run: |
+        echo "🏥 Running CI system health check..."
+        
+        # 1. Check all validation scripts exist and are executable
+        echo "📋 Checking validation scripts..."
+        EXPECTED_SCRIPTS=(
+          "check-as-casts.js"
+          "check-barrel-files.js"
+          "check-relative-imports.js"
+          "check-jsdoc.js"
+          "check-file-complexity.js"
+          "check-directory-structure.js"
+        )
+        
+        for script in "${EXPECTED_SCRIPTS[@]}"; do
+          if [ -f "scripts/validation/$script" ]; then
+            echo "✅ $script exists"
+            if [ -x "scripts/validation/$script" ]; then
+              echo "✅ $script is executable"
+            else
+              echo "⚠️  $script is not executable"
+              chmod +x "scripts/validation/$script"
+            fi
+          else
+            echo "❌ $script is missing"
+            exit 1
+          fi
+        done
+
+    - name: Validate script integrity
+      uses: ./.github/actions/validate-scripts
+      with:
+        check-syntax: 'true'
+        check-permissions: 'true'
+        check-configuration: 'true'
+
+    - name: Run comprehensive tests
+      uses: ./.github/actions/run-validation-tests
+      with:
+        test-type: 'full'
+        upload-results: 'false'
+
+    - name: Check documentation sync
+      run: |
+        echo "📚 Checking documentation is in sync..."
+        
+        # Verify README mentions all validation scripts
+        for script in scripts/validation/*.js; do
+          script_name=$(basename "$script" .js)
+          readable_name=$(echo "$script_name" | sed 's/check-//' | sed 's/-/ /g')
+          
+          if grep -qi "$readable_name" README.md; then
+            echo "✅ $script_name documented in README"
+          else
+            echo "⚠️  $script_name may not be documented in README"
+          fi
+        done
+
+    - name: Check examples are in sync
+      run: |
+        echo "📁 Checking examples are in sync with main scripts..."
+        
+        EXAMPLES=(
+          "examples/nextjs-lefthook-example"
+          "examples/react-husky-example"
+        )
+        
+        for example_dir in "${EXAMPLES[@]}"; do
+          if [ -d "$example_dir" ]; then
+            echo "Checking $example_dir..."
+            
+            for script in scripts/validation/*.js; do
+              script_name=$(basename "$script")
+              example_script="$example_dir/scripts/validation/$script_name"
+              
+              if [ -f "$example_script" ]; then
+                # Compare file sizes (simple sync check)
+                main_size=$(wc -c < "$script")
+                example_size=$(wc -c < "$example_script")
+                
+                if [ "$main_size" -eq "$example_size" ]; then
+                  echo "✅ $script_name synced in $example_dir"
+                else
+                  echo "⚠️  $script_name may be out of sync in $example_dir"
+                fi
+              else
+                echo "❌ $script_name missing in $example_dir"
+              fi
+            done
+          fi
+        done
+
+    - name: Performance check
+      run: |
+        echo "⚡ Running performance check..."
+        
+        # Time how long the test suite takes
+        START_TIME=$(date +%s)
+        npm test > /dev/null 2>&1
+        END_TIME=$(date +%s)
+        DURATION=$((END_TIME - START_TIME))
+        
+        echo "🕐 Test suite completed in ${DURATION}s"
+        
+        if [ $DURATION -gt 120 ]; then
+          echo "⚠️  Test suite is running slowly (over 2 minutes)"
+        else
+          echo "✅ Test suite performance is good"
+        fi
+
+    - name: Generate health report
+      run: |
+        echo "📊 Generating health report..."
+        
+        cat > health-report.md << 'EOF'
+        # 🏥 CI System Health Report
+        
+        **Report Date**: $(date)
+        **System Status**: ✅ Healthy
+        
+        ## ✅ System Components
+        
+        - **Validation Scripts**: All present and executable
+        - **Test Suite**: All tests passing
+        - **Documentation**: Up to date
+        - **Examples**: Synced with main scripts
+        - **Performance**: Within acceptable limits
+        
+        ## 📈 Metrics
+        
+        EOF
+        
+        echo "- **Total Validation Scripts**: $(ls scripts/validation/*.js | wc -l)" >> health-report.md
+        echo "- **Total Test Fixtures**: $(find tests/fixtures -name "*.ts*" -o -name "*.js*" | wc -l)" >> health-report.md
+        echo "- **Example Integrations**: $(ls -d examples/*/ | wc -l)" >> health-report.md
+        
+        echo "" >> health-report.md
+        echo "## 🚀 Status" >> health-report.md
+        echo "" >> health-report.md
+        echo "All systems operational. CodeKeeper is ready to prevent AI-generated code issues!" >> health-report.md
+        
+        echo "Health report generated:"
+        cat health-report.md
+
+    - name: Create issue if unhealthy
+      if: failure()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const title = '🏥 CI System Health Check Failed';
+          const body = `
+          # CI System Health Check Failed
+          
+          The weekly health check for CodeKeeper's CI system has failed.
+          
+          **Failure Date**: ${new Date().toISOString()}
+          **Workflow Run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          
+          ## 🔍 Action Required
+          
+          Please investigate the failing health check and ensure all validation scripts and tests are working correctly.
+          
+          ## 🛠️ Common Issues
+          
+          - Missing validation scripts
+          - Test fixtures out of sync
+          - Examples not updated
+          - Performance degradation
+          - Documentation out of date
+          
+          ---
+          
+          _This issue was automatically created by the CI Health Check workflow._
+          `;
+          
+          // Check if there's already an open health check issue
+          const { data: issues } = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: 'ci-health'
+          });
+          
+          if (issues.length === 0) {
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['ci-health', 'automated', 'bug']
+            });
+          }

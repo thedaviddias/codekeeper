@@ -1,0 +1,52 @@
+{
+  "name": "codekeeper-guardrails",
+  "version": "1.0.0",
+  "description": "Essential guardrails to prevent AI from going sideways in development projects",
+  "scripts": {
+    "guardrails:check": "node scripts/validation/check-all.js",
+    "guardrails:type-safety": "node scripts/validation/check-as-casts.js --all",
+    "guardrails:imports": "node scripts/validation/check-barrel-files.js && node scripts/validation/check-relative-imports.js",
+    "guardrails:structure": "node scripts/validation/check-directory-structure.js",
+    "guardrails:complexity": "node scripts/validation/check-file-complexity.js --report",
+    "guardrails:docs": "node scripts/validation/check-jsdoc.js",
+    "guardrails:install": "lefthook install",
+    "guardrails:setup": "npm run guardrails:install && ./setup-git-template.sh && echo '✅ Guardrails installed! Run git commit to test.'",
+    "test": "node tests/test-runner.js",
+    "test:as-casts": "node scripts/validation/check-as-casts.js tests/fixtures/as-casts/bad-component.tsx",
+    "test:barrel-files": "node scripts/validation/check-barrel-files.js",
+    "test:relative-imports": "node scripts/validation/check-relative-imports.js tests/fixtures/relative-imports/bad-imports.tsx",
+    "test:jsdoc": "node scripts/validation/check-jsdoc.js tests/fixtures/jsdoc/bad-jsdoc.ts",
+    "test:complexity": "node scripts/validation/check-file-complexity.js tests/fixtures/complexity/complex-file.tsx",
+    "test:file-complexity": "node scripts/validation/check-file-complexity.js tests/fixtures/complexity/complex-file.tsx",
+    "test:structure": "node scripts/validation/check-directory-structure.js",
+    "test:directory-structure": "node scripts/validation/check-directory-structure.js",
+    "test:validate": "npm test && echo '✅ All validation scripts are working correctly!'",
+    "check:node": "node scripts/check-node-version.js"
+  },
+  "keywords": [
+    "ai",
+    "guardrails",
+    "code-quality",
+    "typescript",
+    "validation",
+    "git-hooks",
+    "lefthook"
+  ],
+  "author": "David Dias (https://thedaviddias.com)",
+  "license": "MIT",
+  "devDependencies": {
+    "lefthook": "^1.5.0"
+  },
+  "engines": {
+    "node": ">=20.11.1",
+    "npm": ">=10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thedaviddias/codekeeper.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thedaviddias/codekeeper/issues"
+  },
+  "homepage": "https://github.com/thedaviddias/codekeeper#readme"
+}

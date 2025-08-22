@@ -1,0 +1,321 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      main-release-created: ${{ steps.release.outputs.release_created }}
+      main-tag-name: ${{ steps.release.outputs.tag_name }}
+      eslint-plugin-release-created: ${{ steps.release.outputs['eslint-plugin-codekeeper--release_created'] }}
+      eslint-plugin-tag-name: ${{ steps.release.outputs['eslint-plugin-codekeeper--tag_name'] }}
+    
+    steps:
+      - name: Release Please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: .github/release-please-config.json
+          manifest-file: .github/.release-please-manifest.json
+
+  publish-main-release:
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: needs.release-please.outputs.main-release-created == 'true'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          install-dependencies: 'true'
+      
+      - name: Run comprehensive tests before release
+        run: |
+          echo "🧪 Running comprehensive tests before main release..."
+          npm test
+          node test-validation/test-eslint-plugin.js
+          echo "✅ All tests passed"
+      
+      - name: Create GitHub Release Assets
+        run: |
+          echo "📦 Creating release assets..."
+          
+          # Create a comprehensive release package
+          mkdir -p release-assets
+          
+          # Copy validation scripts
+          cp -r scripts/ release-assets/
+          
+          # Copy examples
+          cp -r examples/ release-assets/
+          
+          # Copy documentation
+          cp -r docs/ release-assets/ || echo "No docs directory found"
+          
+          # Create installation script
+          cat > release-assets/install-codekeeper.sh << 'EOF'
+          #!/bin/bash
+          # CodeKeeper Installation Script
+          
+          echo "🛡️  Installing CodeKeeper Validation Scripts..."
+          
+          # Copy validation scripts
+          if [ ! -d "scripts" ]; then
+            mkdir -p scripts
+          fi
+          
+          cp -r validation/ scripts/
+          
+          # Install git hooks if lefthook.yml exists
+          if [ -f "lefthook.yml" ] && command -v lefthook >/dev/null 2>&1; then
+            echo "Installing git hooks with lefthook..."
+            lefthook install
+          fi
+          
+          echo "✅ CodeKeeper installed successfully!"
+          echo "📋 Available validation scripts:"
+          ls scripts/validation/
+          EOF
+          
+          chmod +x release-assets/install-codekeeper.sh
+          
+          # Create archive
+          tar -czf codekeeper-${{ needs.release-please.outputs.main-tag-name }}.tar.gz -C release-assets .
+          
+          echo "📁 Release assets created"
+      
+      - name: Upload Release Assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: release-assets/
+      
+      - name: Update GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Get the release
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: '${{ needs.release-please.outputs.main-tag-name }}'
+            });
+            
+            // Upload the tarball
+            if (fs.existsSync('codekeeper-${{ needs.release-please.outputs.main-tag-name }}.tar.gz')) {
+              const assetData = fs.readFileSync('codekeeper-${{ needs.release-please.outputs.main-tag-name }}.tar.gz');
+              
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                name: 'codekeeper-${{ needs.release-please.outputs.main-tag-name }}.tar.gz',
+                data: assetData,
+                headers: {
+                  'content-type': 'application/gzip',
+                  'content-length': assetData.length
+                }
+              });
+            }
+            
+            // Update release body with installation instructions
+            const releaseBody = release.body + `
+
+            ## 🚀 Quick Installation
+
+            ### Option 1: Download and Extract
+            \`\`\`bash
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ needs.release-please.outputs.main-tag-name }}/codekeeper-${{ needs.release-please.outputs.main-tag-name }}.tar.gz | tar -xz
+            \`\`\`
+
+            ### Option 2: Copy Individual Scripts
+            Copy the validation scripts from \`scripts/validation/\` to your project and set up git hooks with lefthook.
+
+            ### Option 3: Use ESLint Plugin
+            \`\`\`bash
+            npm install @thedaviddias/eslint-plugin-codekeeper
+            \`\`\`
+
+            ## 📋 What's Included
+            - ✅ **Validation Scripts**: Copy-paste ready validation scripts
+            - ✅ **Examples**: Real-world integration examples  
+            - ✅ **Git Hooks**: Pre-configured lefthook integration
+            - ✅ **ESLint Plugin**: IDE integration available separately
+
+            ---
+            
+            **🛡️ CodeKeeper**: AI Development Guardrails for React/Next.js Projects`;
+            
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              body: releaseBody
+            });
+
+  publish-eslint-plugin:
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: needs.release-please.outputs.eslint-plugin-release-created == 'true'
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: ./.github/actions/setup-node
+        with:
+          install-dependencies: 'false'
+      
+      - name: Sync and validate ESLint plugin
+        run: |
+          echo "🔄 Syncing validators to ESLint plugin..."
+          cp -r lib/ eslint-plugin-codekeeper/
+          
+          echo "🧪 Validating ESLint plugin..."
+          
+          # Test plugin structure and functionality
+          cd eslint-plugin-codekeeper
+          node -e "
+            const plugin = require('./index.js');
+            if (!plugin.meta || !plugin.rules || !plugin.configs) {
+              console.log('❌ Plugin structure invalid');
+              process.exit(1);
+            }
+            console.log('✅ Plugin structure valid');
+          "
+          cd ..
+          
+          # Test ESLint rules functionality
+          node test-validation/test-eslint-plugin.js
+          
+          echo "✅ ESLint plugin validation complete"
+      
+      - name: Authenticate to GitHub Packages
+        run: echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+      
+      - name: Publish ESLint plugin to GitHub Packages
+        working-directory: ./eslint-plugin-codekeeper
+        run: |
+          echo "📦 Publishing ESLint plugin to GitHub Packages..."
+          npm publish
+          echo "✅ Published to GitHub Packages"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create ESLint Plugin GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Create a GitHub release for the ESLint plugin
+            const { data: release } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: '${{ needs.release-please.outputs.eslint-plugin-tag-name }}',
+              name: 'ESLint Plugin ${{ needs.release-please.outputs.eslint-plugin-tag-name }}',
+              body: `## 🔌 ESLint Plugin CodeKeeper Release
+
+            This release contains the ESLint plugin for CodeKeeper validation rules.
+
+            ### 📦 Installation
+            \`\`\`bash
+            npm install --save-dev @thedaviddias/eslint-plugin-codekeeper
+            \`\`\`
+
+            ### ⚙️ Configuration
+            \`\`\`javascript
+            // .eslintrc.js
+            module.exports = {
+              plugins: ['@thedaviddias/codekeeper'],
+              extends: ['plugin:@thedaviddias/codekeeper/recommended']
+            };
+            \`\`\`
+
+            ### 🛡️ Rules Included
+            - **\`no-unsafe-as-casts\`**: Prevents dangerous TypeScript \`as\` casts
+            - **\`no-barrel-files\`**: Warns against barrel files that harm tree-shaking
+            - **\`max-file-complexity\`**: Enforces file complexity limits
+            - **\`require-jsdoc\`**: Requires JSDoc comments for functions and classes
+
+            ### 🎯 Available Configurations
+            - **\`recommended\`**: Balanced rules for most projects
+            - **\`strict\`**: Stricter rules for high-quality codebases  
+            - **\`react\`**: Optimized for React projects
+
+            ### 📋 Usage Examples
+            \`\`\`javascript
+            // Recommended config
+            extends: ['plugin:@thedaviddias/codekeeper/recommended']
+
+            // Strict config  
+            extends: ['plugin:@thedaviddias/codekeeper/strict']
+
+            // React-specific config
+            extends: ['plugin:@thedaviddias/codekeeper/react']
+            \`\`\`
+
+            ---
+            
+            **🔗 Links:**
+            - [Main CodeKeeper Project](https://github.com/${{ github.repository }})
+            - [GitHub Package](https://github.com/${{ github.repository }}/packages/)
+            - [Documentation](https://github.com/${{ github.repository }}#readme)
+            
+            **🛡️ CodeKeeper**: AI Development Guardrails for React/Next.js Projects`,
+              draft: false,
+              prerelease: false
+            });
+            
+            console.log('✅ ESLint plugin GitHub release created');
+
+  notify-releases:
+    runs-on: ubuntu-latest
+    needs: [release-please, publish-main-release, publish-eslint-plugin]
+    if: always() && (needs.release-please.outputs.main-release-created == 'true' || needs.release-please.outputs.eslint-plugin-release-created == 'true')
+    
+    steps:
+      - name: Notify about releases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let message = '🚀 **New CodeKeeper Releases**\n\n';
+            
+            if ('${{ needs.release-please.outputs.main-release-created }}' === 'true') {
+              message += `### 🛡️ Main Project: ${{ needs.release-please.outputs.main-tag-name }}\n`;
+              message += '- ✅ Validation scripts updated\n';
+              message += '- ✅ Examples and documentation included\n';
+              message += '- ✅ Release assets available for download\n\n';
+            }
+            
+            if ('${{ needs.release-please.outputs.eslint-plugin-release-created }}' === 'true') {
+              message += `### 🔌 ESLint Plugin: ${{ needs.release-please.outputs.eslint-plugin-tag-name }}\n`;
+              message += '- ✅ Published to GitHub Packages\n';
+              message += '- ✅ All rules updated with latest validation logic\n';
+              message += '- ✅ Ready for npm installation\n\n';
+            }
+            
+            message += '### 📦 Installation Options\n';
+            message += '1. **Copy-Paste Scripts**: Download release assets\n';  
+            message += '2. **ESLint Plugin**: `npm install @thedaviddias/eslint-plugin-codekeeper`\n';
+            message += '3. **Browse Examples**: Check the examples/ directory\n\n';
+            message += 'See the release notes for detailed changes and migration guides.';
+            
+            // This could be extended to post to Slack, Discord, etc.
+            console.log(message);

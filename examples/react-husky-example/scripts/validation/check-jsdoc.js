@@ -1,59 +1,79 @@
 #!/usr/bin/env node
 
+/**
+ * Validates JSDoc documentation for functions, components, and classes
+ * Ensures code is properly documented for better maintainability
+ */
+
+// ============================================================================
+// CONFIGURATION - Customize these settings for your project
+// ============================================================================
+
+// What needs JSDoc documentation
+const DOCUMENTATION_REQUIREMENTS = {
+  functions: true,       // All functions must have JSDoc
+  components: true,      // All React components must have JSDoc  
+  classes: true,         // All classes must have JSDoc
+  interfaces: false,     // Interfaces optional (TypeScript provides good docs)
+  types: false,          // Type aliases optional
+  constants: false,      // Constants optional (usually self-documenting)
+  hooks: true,           // Custom React hooks must have JSDoc
+}
+
+// Required JSDoc sections (description is always required)
+const REQUIRED_TAGS = {
+  functions: ['@param', '@returns'],     // Functions need params and return docs
+  components: ['@param'],                // Components need prop docs
+  classes: [],                          // Classes just need description
+  hooks: ['@param', '@returns'],        // Hooks need params and return docs
+}
+
+// Files and directories to exclude from JSDoc checking
+const EXCLUDE_PATTERNS = [
+  // Test files
+  /\.test\.(ts|tsx|js|jsx|mjs|cjs)$/,
+  /\.spec\.(ts|tsx|js|jsx|mjs|cjs)$/,
+  /__tests__/,
+  
+  // Config files
+  /\.config\.(ts|js|mjs|cjs)$/,
+  /next\.config\./,
+  /jest\.setup\./,
+  /next-env\.d\.ts$/,
+  
+  // Build directories
+  /node_modules/,
+  /\.next/,
+  /dist/,
+  /build/,
+  /coverage/,
+  /\.git/,
+]
+
+// Minimum function size to require JSDoc (lines of code)
+const MIN_FUNCTION_SIZE_FOR_JSDOC = 3
+
+// TypeScript integration settings
+const TYPESCRIPT_SETTINGS = {
+  inferTypes: true,          // Infer types from TypeScript signatures
+  requireTypeAnnotations: false, // Don't require {Type} in JSDoc comments
+}
+
+// ============================================================================
+// IMPLEMENTATION - No need to modify below this line
+// ============================================================================
+
 const fs = require('fs')
 const path = require('path')
 
-// Configuration for JSDoc enforcement
-const JSDOC_CONFIG = {
-  // File patterns to check
-  patterns: ['**/*.ts', '**/*.tsx'],
+// Helper function to check if file should be excluded
+function shouldExcludeFile(filePath) {
+  return EXCLUDE_PATTERNS.some(pattern => pattern.test(filePath))
+}
 
-  // Directories to exclude
-  excludeDirs: ['node_modules', '.next', 'dist', 'build', '__tests__', '.git', 'coverage'],
-
-  // Files to exclude
-  excludeFiles: [
-    '*.test.ts',
-    '*.test.tsx',
-    '*.spec.ts',
-    '*.spec.tsx',
-    '*.config.ts',
-    '*.config.js',
-    'next.config.mjs',
-    'jest.setup.ts',
-    'next-env.d.ts',
-  ],
-
-  // Minimum JSDoc requirements
-  requirements: {
-    functions: true, // All functions must have JSDoc
-    components: true, // All React components must have JSDoc
-    classes: true, // All classes must have JSDoc
-    interfaces: false, // Interfaces are optional (TypeScript provides good docs)
-    types: false, // Type aliases are optional
-    constants: false, // Constants are optional (usually self-documenting)
-  },
-
-  // Required JSDoc tags (types inferred from TypeScript)
-  requiredTags: {
-    functions: ['@description', '@param', '@returns'],
-    components: ['@description', '@param'],
-    classes: ['@description'],
-  },
-
-  // TypeScript integration settings
-  typescript: {
-    inferTypes: true, // Automatically infer types from TS signatures
-    requireTypes: false, // Don't require {Type} in JSDoc
-    validateTypeMatch: false, // Don't validate JSDoc types match TS types
-  },
-
-  // Complexity thresholds for mandatory JSDoc
-  complexityThresholds: {
-    minLines: 5, // Functions/components > 5 lines must have JSDoc
-    minParams: 2, // Functions with > 2 params must document params
-    minComplexity: 3, // Functions with complexity > 3 must have detailed docs
-  },
+// Helper function to check if directory should be excluded
+function shouldExcludeDirectory(dirPath) {
+  return EXCLUDE_PATTERNS.some(pattern => pattern.test(dirPath))
 }
 
 class JSDocValidator {
@@ -73,9 +93,7 @@ class JSDocValidator {
    * @returns {boolean} True if directory should be excluded
    */
   shouldExcludeDirectory(dirPath) {
-    return JSDOC_CONFIG.excludeDirs.some(
-      (excluded) => dirPath.includes(excluded) || dirPath.startsWith(excluded),
-    )
+    return shouldExcludeDirectory(dirPath)
   }
 
   /**
@@ -84,13 +102,7 @@ class JSDocValidator {
    * @returns {boolean} True if file should be excluded
    */
   shouldExcludeFile(fileName) {
-    return JSDOC_CONFIG.excludeFiles.some((pattern) => {
-      if (pattern.includes('*')) {
-        const regex = new RegExp(pattern.replace(/\*/g, '.*'))
-        return regex.test(fileName)
-      }
-      return fileName === pattern || fileName.endsWith(pattern)
-    })
+    return shouldExcludeFile(fileName)
   }
 
   /**
@@ -102,7 +114,7 @@ class JSDocValidator {
   extractJSDoc(content, lineNumber) {
     const lines = content.split('\n')
     const jsDocLines = []
-    let currentLine = lineNumber - 1
+    let currentLine = lineNumber - 2 // Start from the line before the function
 
     // Look backwards for JSDoc comment
     while (currentLine >= 0) {
@@ -148,7 +160,7 @@ class JSDocValidator {
     }
 
     const errors = []
-    const requiredTags = JSDOC_CONFIG.requiredTags[type] || []
+    const requiredTags = REQUIRED_TAGS[type] || []
 
     requiredTags.forEach((tag) => {
       const tagError = this.validateJSDocTag(jsDoc, tag, context)
@@ -211,7 +223,7 @@ class JSDocValidator {
 
     // Check for type specifications (warn but don't block)
     const typedParams = jsDoc.match(/@param\s+\{[^}]+\}/g) || []
-    if (typedParams.length > 0 && JSDOC_CONFIG.typescript.inferTypes) {
+    if (typedParams.length > 0 && TYPESCRIPT_SETTINGS.inferTypes) {
       // Note: This could be a warning in the future
       // For now, we allow both typed and untyped @param tags
     }
@@ -236,7 +248,7 @@ class JSDocValidator {
 
     // Check for type specifications in @returns (warn but don't block)
     const typedReturns = jsDoc.match(/@returns?\s+\{[^}]+\}/g) || []
-    if (typedReturns.length > 0 && JSDOC_CONFIG.typescript.inferTypes) {
+    if (typedReturns.length > 0 && TYPESCRIPT_SETTINGS.inferTypes) {
       // Note: This could be a warning in the future
       // For now, we allow both typed and untyped @returns tags
     }
@@ -406,8 +418,13 @@ class JSDocValidator {
    * @returns {boolean} True if should validate
    */
   shouldValidateElement(type) {
-    const requirementKey = type === 'component' ? 'components' : type
-    return JSDOC_CONFIG.requirements[requirementKey]
+    let requirementKey = type
+    if (type === 'component') requirementKey = 'components'
+    if (type === 'function') requirementKey = 'functions'
+    if (type === 'class') requirementKey = 'classes'
+    if (type === 'hook') requirementKey = 'hooks'
+    
+    return DOCUMENTATION_REQUIREMENTS[requirementKey] === true
   }
 
   /**
@@ -488,7 +505,7 @@ class JSDocValidator {
       } else if (stat.isFile()) {
         if (this.shouldExcludeFile(item)) return
 
-        if (item.endsWith('.ts') || item.endsWith('.tsx')) {
+        if (item.endsWith('.ts') || item.endsWith('.tsx') || item.endsWith('.js') || item.endsWith('.jsx') || item.endsWith('.mjs') || item.endsWith('.cjs')) {
           this.validateFile(fullPath)
         }
       }
@@ -538,13 +555,26 @@ function main() {
   console.log('📚 Checking JSDoc documentation...\n')
 
   const validator = new JSDocValidator()
+  
+  // Parse command line arguments
+  const args = process.argv.slice(2)
+  const specificFiles = args.filter(arg => !arg.startsWith('--') && /\.(ts|tsx|js|jsx|mjs|cjs)$/.test(arg))
 
-  // Validate common source directories
-  const dirsToCheck = ['lib', 'components', 'hooks', 'app'].filter((dir) => fs.existsSync(dir))
+  if (specificFiles.length > 0) {
+    // Validate specific files provided as arguments
+    specificFiles.forEach(file => {
+      if (fs.existsSync(file)) {
+        validator.validateFile(file)
+      }
+    })
+  } else {
+    // Validate common source directories
+    const dirsToCheck = ['lib', 'components', 'hooks', 'app'].filter((dir) => fs.existsSync(dir))
 
-  dirsToCheck.forEach((dir) => {
-    validator.validateDirectory(dir)
-  })
+    dirsToCheck.forEach((dir) => {
+      validator.validateDirectory(dir)
+    })
+  }
 
   const report = validator.generateReport()
 
@@ -595,4 +625,4 @@ if (require.main === module) {
   main()
 }
 
-module.exports = { JSDocValidator, JSDOC_CONFIG }
+module.exports = { JSDocValidator }

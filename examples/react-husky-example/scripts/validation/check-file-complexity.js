@@ -1,14 +1,81 @@
 #!/usr/bin/env node
 
+/**
+ * Validates file complexity to ensure maintainable code
+ * Prevents files from becoming too large or complex
+ */
+
+// ============================================================================
+// CONFIGURATION - Customize these settings for your project
+// ============================================================================
+
+// Complexity limits for different file types
+const COMPLEXITY_LIMITS = {
+  lines: 500,              // Max lines per file
+  functions: 15,           // Max functions per file  
+  dependencies: 20,        // Max import statements
+  nestingDepth: 10,        // Max nesting depth (braces)
+  cognitiveComplexity: 20, // Max cognitive complexity per function
+}
+
+// React-specific limits (stricter for components)
+const REACT_LIMITS = {
+  lines: 300,              // Shorter for React components
+  functions: 10,           // Fewer functions per component
+  dependencies: 15,        // Fewer imports
+  nestingDepth: 8,         // Less nesting in JSX
+  cognitiveComplexity: 15, // Simpler component logic
+}
+
+// File patterns that should use React limits
+const REACT_FILE_PATTERNS = [
+  /\.tsx$/,                // TypeScript React files
+  /\.jsx$/,                // JavaScript React files
+  /Component\.(ts|js|mjs)$/,  // Component files
+  /\/components\//,        // Files in components directory
+]
+
+// Files to exclude from complexity checking
+const EXCLUDE_PATTERNS = [
+  /node_modules/,
+  /\.test\./,
+  /\.spec\./,
+  /\.d\.ts$/,
+  /build\//,
+  /dist\//,
+  /coverage\//,
+  /\.next\//,
+]
+
+// Directories to analyze when no specific files are provided
+const ANALYSIS_DIRECTORIES = [
+  'src',         // Traditional source directory
+  'app',         // Next.js 13+ app directory
+  'pages',       // Next.js pages directory
+  'components',  // React components
+  'features',    // Feature-based modules
+  'lib',         // Utility libraries
+  'hooks',       // React hooks
+  'utils',       // General utilities
+  'types',       // TypeScript types
+]
+
+// ============================================================================
+// IMPLEMENTATION - No need to modify below this line
+// ============================================================================
+
 const fs = require('fs')
 const path = require('path')
 
-const COMPLEXITY_LIMITS = {
-  lines: 500, // Max lines per file (increased for initial commit)
-  functions: 15, // Max functions per file (increased for initial commit)
-  dependencies: 20, // Max import statements (increased for initial commit)
-  nestingDepth: 10, // Max nesting depth (increased for initial commit)
-  cognitiveComplexity: 20, // Max cognitive complexity per function (increased for initial commit)
+// Helper function to determine which limits to use
+function getLimitsForFile(filePath) {
+  const isReactFile = REACT_FILE_PATTERNS.some(pattern => pattern.test(filePath))
+  return isReactFile ? REACT_LIMITS : COMPLEXITY_LIMITS
+}
+
+// Helper function to check if file should be excluded
+function shouldExcludeFile(filePath) {
+  return EXCLUDE_PATTERNS.some(pattern => pattern.test(filePath))
 }
 
 function calculateNestingDepth(content) {
@@ -98,32 +165,33 @@ function analyzeFile(filePath) {
 }
 
 function checkViolations(analysis) {
-  const { metrics } = analysis
+  const { metrics, filePath } = analysis
+  const limits = getLimitsForFile(filePath)
   const violations = []
 
-  if (metrics.lines > COMPLEXITY_LIMITS.lines) {
-    violations.push(`File has ${metrics.lines} lines (limit: ${COMPLEXITY_LIMITS.lines})`)
+  if (metrics.lines > limits.lines) {
+    violations.push(`File has ${metrics.lines} lines (limit: ${limits.lines})`)
   }
 
-  if (metrics.functions > COMPLEXITY_LIMITS.functions) {
+  if (metrics.functions > limits.functions) {
     violations.push(
-      `File has ${metrics.functions} functions (limit: ${COMPLEXITY_LIMITS.functions})`,
+      `File has ${metrics.functions} functions (limit: ${limits.functions})`,
     )
   }
 
-  if (metrics.imports > COMPLEXITY_LIMITS.dependencies) {
+  if (metrics.imports > limits.dependencies) {
     violations.push(
-      `File has ${metrics.imports} imports (limit: ${COMPLEXITY_LIMITS.dependencies})`,
+      `File has ${metrics.imports} imports (limit: ${limits.dependencies})`,
     )
   }
 
-  if (metrics.nestingDepth > COMPLEXITY_LIMITS.nestingDepth) {
+  if (metrics.nestingDepth > limits.nestingDepth) {
     violations.push(
-      `Max nesting depth is ${metrics.nestingDepth} (limit: ${COMPLEXITY_LIMITS.nestingDepth})`,
+      `Max nesting depth is ${metrics.nestingDepth} (limit: ${limits.nestingDepth})`,
     )
   }
 
-  if (metrics.cognitiveComplexity > COMPLEXITY_LIMITS.cognitiveComplexity * 3) {
+  if (metrics.cognitiveComplexity > limits.cognitiveComplexity * 3) {
     violations.push(`High cognitive complexity: ${metrics.cognitiveComplexity}`)
   }
 
@@ -202,9 +270,9 @@ function main() {
         try {
           const stat = fs.statSync(fullPath)
 
-          if (stat.isDirectory() && !item.startsWith('.') && item !== 'node_modules') {
+          if (stat.isDirectory() && !shouldExcludeFile(fullPath)) {
             getAllFiles(fullPath, fileList)
-          } else if (stat.isFile() && (item.endsWith('.tsx') || item.endsWith('.ts'))) {
+          } else if (stat.isFile() && (item.endsWith('.tsx') || item.endsWith('.ts') || item.endsWith('.js') || item.endsWith('.jsx') || item.endsWith('.mjs') || item.endsWith('.cjs')) && !shouldExcludeFile(fullPath)) {
             fileList.push(fullPath)
           }
         } catch (_error) {
@@ -215,9 +283,8 @@ function main() {
       return fileList
     }
 
-    const dirs = ['app', 'components', 'features', 'lib', 'hooks'].filter((dir) =>
-      fs.existsSync(dir),
-    )
+    // Check configured directories that exist in the project
+    const dirs = ANALYSIS_DIRECTORIES.filter((dir) => fs.existsSync(dir))
     files = dirs.flatMap((dir) => getAllFiles(dir))
   }
 
@@ -293,4 +360,17 @@ function main() {
   process.exit(0)
 }
 
-main()
+// Run validation (only if called directly)
+if (require.main === module) {
+  main()
+}
+
+// Export for use in ESLint plugin
+module.exports = {
+  DEFAULT_LIMITS,
+  ANALYSIS_DIRECTORIES,
+  EXCLUDE_PATTERNS,
+  analyzeFile,
+  getLimitsForFile,
+  shouldExcludeFile
+}

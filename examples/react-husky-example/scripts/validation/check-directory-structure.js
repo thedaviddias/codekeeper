@@ -1,339 +1,249 @@
 #!/usr/bin/env node
 
+/**
+ * Validates project directory structure for maintainability
+ * Enforces consistent organization patterns
+ */
+
+// ============================================================================
+// CONFIGURATION - Customize these settings for your project
+// ============================================================================
+
+// Required top-level directories and their rules
+const REQUIRED_DIRECTORIES = [
+  'src',           // Source code
+  'components',    // React components (can be in src/)
+]
+
+// Optional directories that have specific structure rules when present
+const OPTIONAL_DIRECTORIES = [
+  'lib',           // Utility libraries
+  'hooks',         // Custom React hooks
+  'types',         // TypeScript type definitions
+  'styles',        // CSS/styling files
+  'utils',         // General utilities
+  'api',           // API related code
+  'features',      // Feature-based modules
+]
+
+// Component organization patterns (adjust for your team's preference)
+const COMPONENT_STRUCTURE = {
+  allowedSubdirectories: [
+    'ui',            // Basic UI components (Button, Input, etc.) usually for Shadcn/UI
+    'layout',        // Layout components (Header, Footer, etc.)
+    'forms',         // Form-related components
+    'common',        // Shared/common components
+    'pages',         // Page-specific components
+  ],
+  maxDepth: 3,       // Maximum nesting depth for component directories
+  enforceGrouping: true, // Require components to be in subdirectories
+}
+
+// Files that are allowed in the root directory
+const ALLOWED_ROOT_FILES = [
+  // Configuration files
+  'package.json',
+  'tsconfig.json',
+  'jsconfig.json',
+  'next.config.js',
+  'next.config.mjs',
+  'next.config.ts',
+  'tailwind.config.js',
+  'tailwind.config.ts',
+  'tailwind.config.mjs',
+  'postcss.config.js',
+  'postcss.config.mjs',
+  'postcss.config.cjs',
+  'eslint.config.js',
+  'eslint.config.mjs',
+  'eslint.config.ts',
+  '.eslintrc.js',
+  '.eslintrc.mjs',
+  '.eslintrc.cjs',
+  '.eslintrc.json',
+  'prettier.config.js',
+  'prettier.config.mjs',
+  'prettier.config.cjs',
+  '.prettierrc.js',
+  '.prettierrc.mjs',
+  'vite.config.js',
+  'vite.config.ts',
+  'vite.config.mjs',
+  'vitest.config.js',
+  'vitest.config.ts',
+  'vitest.config.mjs',
+  'webpack.config.js',
+  'webpack.config.mjs',
+  'rollup.config.js',
+  'rollup.config.mjs',
+
+  // Documentation
+  'README.md',
+  'CHANGELOG.md',
+  'LICENSE',
+
+  // Git and CI
+  '.gitignore',
+  '.gitattributes',
+  'lefthook.yml',
+  '.husky',
+
+  // Other
+  '.env.example',
+  '.env.local',
+  'yarn.lock',
+  'package-lock.json',
+  'pnpm-lock.yaml',
+]
+
+// Directories to exclude from structure checking
+const EXCLUDE_DIRECTORIES = [
+  'node_modules',
+  '.next',
+  '.git',
+  'dist',
+  'build',
+  'out',
+  'coverage',
+  '.turbo',
+  '.vercel',
+  '.netlify',
+]
+
+// ============================================================================
+// IMPLEMENTATION - No need to modify below this line
+// ============================================================================
+
 const fs = require('fs')
 const path = require('path')
 
-const EXPECTED_STRUCTURE = {
-  app: {
-    required: true,
-    subdirs: ['(public)', '(protected)', 'api'],
-    pattern: /^(\(.*\)|api|.*\.tsx?|.*\.css)$/,
-    description: 'App router pages and API routes',
-  },
-  components: {
-    required: true,
-    subdirs: [
-      'ui',
-      'domain',
-      'features',
-      'layouts',
-      'forms',
-      'feedback',
-      'navigation',
-      'visualization',
-      'media',
-      'templates',
-      'interactions',
-      'accessibility',
-      'responsive',
-      'state',
-    ],
-    pattern:
-      /^(ui|domain|features|layouts|forms|feedback|navigation|visualization|media|templates|interactions|accessibility|responsive|state|.*\.tsx?)$/,
-    description: 'Domain-based UI components architecture',
-  },
-  features: {
-    required: false,
-    pattern: /^[a-z-]+$/,
-    description: 'Feature-specific modules',
-    validateSubdir: (dir) => {
-      const expectedFeatureDirs = ['api', 'queries', 'schemas', 'components']
-      const hasValidStructure = expectedFeatureDirs.some((expected) =>
-        fs.existsSync(path.join('features', dir, expected)),
-      )
-      return hasValidStructure || fs.readdirSync(path.join('features', dir)).length === 0
-    },
-  },
-  lib: {
-    required: true,
-    subdirs: [
-      'core',
-      'features',
-      'services',
-      'types',
-      'infrastructure',
-      'patterns',
-      'utilities',
-      'algorithms',
-      'workflows',
-      'bridges',
-      'shared',
-    ],
-    pattern:
-      /^(core|features|services|types|infrastructure|patterns|utilities|algorithms|workflows|bridges|shared|.*\.ts)$/,
-    description: 'Domain-based shared libraries and utilities',
-  },
-  hooks: {
-    required: true,
-    subdirs: ['api', 'auth', 'data', 'ui'],
-    pattern: /^(api|auth|data|ui|use-[a-z-]+\.ts|index\.ts)$/,
-    description: 'Categorized custom React hooks',
-  },
-  tests: {
-    required: true,
-    subdirs: ['mocks', 'utils'],
-    pattern: /^(mocks|utils|.*\.test\.tsx?)$/,
-    description: 'Test utilities and mocks',
-  },
-  scripts: {
-    required: false,
-    subdirs: ['validation'],
-    pattern: /^(validation|.*\.js)$/,
-    description: 'Build and validation scripts',
-  },
-  styles: {
-    required: false,
-    pattern: /^.*\.(css|scss)$/,
-    description: 'Global styles',
-  },
+// Helper function to check if directory should be excluded
+function shouldExcludeDirectory(dirPath) {
+  return EXCLUDE_DIRECTORIES.some(exclude => dirPath.includes(exclude))
 }
 
-const FORBIDDEN_PATTERNS = [
-  {
-    pattern: /^src$/,
-    message: 'Use App Router structure instead of src/ directory',
-  },
-  {
-    pattern: /^pages$/,
-    message: 'Use App Router (app/) instead of Pages Router',
-  },
-  {
-    pattern: /^temp$|^tmp$|^backup$/,
-    message: 'Temporary directories should not be committed',
-  },
-]
+// Helper function to validate component directory structure
+function validateComponentStructure(componentsDir) {
+  const warnings = []
+  const errors = []
 
-function checkForbiddenDirectories() {
-  const violations = []
-  const rootDirs = fs.readdirSync('.')
+  try {
+    // Check for loose component files
+    const componentFiles = fs.readdirSync(componentsDir, { withFileTypes: true })
+      .filter(dirent => dirent.isFile() && /\.(tsx?|jsx?)$/.test(dirent.name))
 
-  FORBIDDEN_PATTERNS.forEach(({ pattern, message }) => {
-    rootDirs.forEach((dir) => {
-      if (pattern.test(dir) && fs.statSync(dir).isDirectory()) {
-        violations.push({ dir, message })
-      }
-    })
-  })
-
-  return violations
-}
-
-function validateDirectoryContents(dir, config) {
-  const violations = []
-
-  if (!fs.existsSync(dir)) {
-    if (config.required) {
-      violations.push({
-        type: 'missing',
-        dir,
-        message: `Required directory missing: ${config.description}`,
-      })
+    if (componentFiles.length > 5) {
+      warnings.push(`Consider organizing components into subdirectories (found ${componentFiles.length} files in ${componentsDir})`)
     }
-    return violations
-  }
 
-  const contents = fs.readdirSync(dir)
+    // Check subdirectory organization
+    const subdirs = fs.readdirSync(componentsDir, { withFileTypes: true })
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => dirent.name)
 
-  // Check for required subdirectories
-  if (config.subdirs) {
-    config.subdirs.forEach((subdir) => {
-      if (!contents.includes(subdir)) {
-        violations.push({
-          type: 'structure',
-          dir: `${dir}/${subdir}`,
-          message: `Missing expected subdirectory`,
-        })
-      }
-    })
-  }
+    const unknownSubdirs = subdirs.filter(dir =>
+      !COMPONENT_STRUCTURE.allowedSubdirectories.includes(dir) &&
+      !shouldExcludeDirectory(path.join(componentsDir, dir))
+    )
 
-  // Validate naming patterns
-  if (config.pattern) {
-    contents.forEach((item) => {
-      const itemPath = path.join(dir, item)
-      const isDirectory = fs.statSync(itemPath).isDirectory()
+    if (unknownSubdirs.length > 0) {
+      warnings.push(`Unexpected component subdirectories: ${unknownSubdirs.join(', ')}. Consider using: ${COMPONENT_STRUCTURE.allowedSubdirectories.join(', ')}`)
+    }
 
-      // Skip validation for directories if we have subdirs defined
-      if (isDirectory && config.subdirs && config.subdirs.includes(item)) {
+    // Check nesting depth
+    const checkDepth = (dir, currentDepth = 0) => {
+      if (currentDepth > COMPONENT_STRUCTURE.maxDepth) {
+        errors.push(`Component directory nesting too deep in ${dir} (max: ${COMPONENT_STRUCTURE.maxDepth})`)
         return
       }
 
-      // Skip hidden files and common config files
-      if (item.startsWith('.') || item === 'package.json' || item === 'README.md') {
-        return
-      }
-
-      if (!config.pattern.test(item)) {
-        violations.push({
-          type: 'naming',
-          dir: `${dir}/${item}`,
-          message: `Invalid naming pattern (expected: ${config.pattern})`,
+      try {
+        const items = fs.readdirSync(dir, { withFileTypes: true })
+        items.forEach(item => {
+          if (item.isDirectory() && !shouldExcludeDirectory(path.join(dir, item.name))) {
+            checkDepth(path.join(dir, item.name), currentDepth + 1)
+          }
         })
+      } catch (_error) {
+        // Skip directories that can't be read
       }
-    })
+    }
+
+    checkDepth(componentsDir)
+
+  } catch (error) {
+    warnings.push(`Could not validate component structure: ${error.message}`)
   }
 
-  // Custom validation for feature directories
-  if (config.validateSubdir) {
-    const subdirs = contents.filter((item) => fs.statSync(path.join(dir, item)).isDirectory())
-
-    subdirs.forEach((subdir) => {
-      if (!config.validateSubdir(subdir)) {
-        violations.push({
-          type: 'structure',
-          dir: `${dir}/${subdir}`,
-          message:
-            'Feature directory missing expected structure (api, queries, schemas, or components)',
-        })
-      }
-    })
-  }
-
-  return violations
+  return { warnings, errors }
 }
 
-function checkForMisplacedFiles() {
-  const violations = []
+// Main validation function
+function validateDirectoryStructure() {
+  const errors = []
+  const warnings = []
 
-  // Check for TypeScript files in root (except config files)
-  const rootFiles = fs.readdirSync('.')
-  const suspiciousRootFiles = rootFiles.filter(
-    (file) =>
-      (file.endsWith('.tsx') || file.endsWith('.ts')) &&
-      !['next.config.mjs', 'jest.setup.ts', 'next-env.d.ts'].includes(file) &&
-      !file.includes('config'),
-  )
-
-  suspiciousRootFiles.forEach((file) => {
-    violations.push({
-      type: 'misplaced',
-      file,
-      message: 'Source files should not be in the root directory',
-    })
-  })
-
-  // Check for components outside of components directory
-  const checkForComponents = (dir, currentPath = '') => {
-    if (!fs.existsSync(dir) || dir === 'components' || dir === 'node_modules') return
-
-    const contents = fs.readdirSync(dir)
-    contents.forEach((item) => {
-      const fullPath = path.join(dir, item)
-      const relativePath = currentPath ? `${currentPath}/${item}` : item
-
-      if (fs.statSync(fullPath).isFile()) {
-        // Check if file looks like a component (PascalCase .tsx files)
-        if (item.match(/^[A-Z].*\.tsx$/) && !dir.includes('components')) {
-          violations.push({
-            type: 'misplaced',
-            file: relativePath,
-            message: 'Component files should be in the components directory',
-          })
-        }
-      } else if (fs.statSync(fullPath).isDirectory() && !item.startsWith('.')) {
-        checkForComponents(fullPath, relativePath)
+  try {
+    // Check if required directories exist
+    REQUIRED_DIRECTORIES.forEach(dir => {
+      if (!fs.existsSync(dir) && !fs.existsSync(path.join('src', dir))) {
+        warnings.push(`Recommended directory missing: ${dir}`)
       }
     })
+
+    // Check for optional directories that have specific rules
+    OPTIONAL_DIRECTORIES.forEach(dir => {
+      const dirPath = fs.existsSync(dir) ? dir : fs.existsSync(path.join('src', dir)) ? path.join('src', dir) : null
+      if (dirPath && !shouldExcludeDirectory(dirPath)) {
+        // Optional directories exist and can be validated for structure if needed
+        // This is where you could add specific validation rules for each directory type
+      }
+    })
+
+    // Check root directory for unwanted files
+    const rootFiles = fs.readdirSync('.', { withFileTypes: true })
+      .filter(dirent => dirent.isFile())
+      .map(dirent => dirent.name)
+
+    const unwantedFiles = rootFiles.filter(file => !ALLOWED_ROOT_FILES.includes(file))
+    if (unwantedFiles.length > 0) {
+      warnings.push(`Consider organizing these root files: ${unwantedFiles.join(', ')}`)
+    }
+
+    // Check component structure if components directory exists
+    const componentsDir = fs.existsSync('components') ? 'components' :
+                         fs.existsSync('src/components') ? 'src/components' : null
+
+    if (componentsDir && COMPONENT_STRUCTURE.enforceGrouping) {
+      const result = validateComponentStructure(componentsDir)
+      warnings.push(...result.warnings)
+      errors.push(...result.errors)
+    }
+
+    console.log('✅ Directory structure validation completed')
+
+    if (warnings.length > 0) {
+      console.log('⚠️  Warnings:')
+      warnings.forEach(warning => console.log(`  - ${warning}`))
+    }
+
+    if (errors.length > 0) {
+      console.log('❌ Errors:')
+      errors.forEach(error => console.log(`  - ${error}`))
+    }
+
+    return errors.length === 0
+
+  } catch (error) {
+    console.error('❌ Directory structure validation failed:', error.message)
+    return false
   }
-
-  // Skip checking in app directory as it can have page components
-  ;['lib', 'hooks'].forEach((dir) => checkForComponents(dir))
-
-  return violations
 }
 
-function main() {
-  console.log('📁 Validating project structure...\n')
-
-  let hasViolations = false
-  const allViolations = []
-
-  // Check forbidden directories
-  const forbidden = checkForbiddenDirectories()
-  if (forbidden.length > 0) {
-    hasViolations = true
-    allViolations.push({ type: 'forbidden', violations: forbidden })
-  }
-
-  // Validate expected structure
-  Object.entries(EXPECTED_STRUCTURE).forEach(([dir, config]) => {
-    const violations = validateDirectoryContents(dir, config)
-    if (violations.length > 0) {
-      hasViolations = true
-      allViolations.push({ type: 'structure', dir, violations })
-    }
-  })
-
-  // Check for misplaced files
-  const misplaced = checkForMisplacedFiles()
-  if (misplaced.length > 0) {
-    hasViolations = true
-    allViolations.push({ type: 'misplaced', violations: misplaced })
-  }
-
-  // Exclude generated types from structure violations
-  allViolations.forEach((group) => {
-    if (group.type === 'structure') {
-      group.violations = group.violations.filter(
-        (v) => !String(v.dir).startsWith('lib/types/generated'),
-      )
-    }
-  })
-
-  // Exclude generated types from structure violations
-  allViolations.forEach((group) => {
-    if (group.type === 'structure') {
-      group.violations = group.violations.filter(
-        (v) => !String(v.dir).startsWith('lib/types/generated'),
-      )
-    }
-  })
-
-  // Report violations
-  if (hasViolations) {
-    console.log('❌ Directory structure violations found:\n')
-
-    // Forbidden directories
-    const forbiddenViolations = allViolations.find((v) => v.type === 'forbidden')
-    if (forbiddenViolations) {
-      console.log('🚫 Forbidden directories:')
-      forbiddenViolations.violations.forEach(({ dir, message }) => {
-        console.log(`  - ${dir}: ${message}`)
-      })
-      console.log()
-    }
-
-    // Structure violations
-    allViolations
-      .filter((v) => v.type === 'structure')
-      .forEach(({ dir, violations }) => {
-        console.log(`📁 ${dir}:`)
-        violations.forEach((v) => {
-          console.log(`  - ${v.dir}: ${v.message}`)
-        })
-        console.log()
-      })
-
-    // Misplaced files
-    const misplacedViolations = allViolations.find((v) => v.type === 'misplaced')
-    if (misplacedViolations) {
-      console.log('📍 Misplaced files:')
-      misplacedViolations.violations.forEach(({ file, message }) => {
-        console.log(`  - ${file}: ${message}`)
-      })
-      console.log()
-    }
-
-    console.log('💡 Fix directory structure violations before committing')
-
-    if (process.env.NODE_ENV !== 'development') {
-      process.exit(1)
-    }
-  } else {
-    console.log('✅ Project structure is valid')
-  }
-
-  process.exit(0)
+// Run validation if called directly
+if (require.main === module) {
+  const success = validateDirectoryStructure()
+  process.exit(success ? 0 : 1)
 }
 
-main()
+module.exports = { validateDirectoryStructure }

@@ -5,6 +5,51 @@
  * Enforces proper type safety without type casting
  */
 
+// ============================================================================
+// CONFIGURATION - Customize these settings for your project
+// ============================================================================
+
+// Patterns to detect unsafe 'as' type assertions
+const AS_CAST_PATTERNS = [
+  // Match 'as Type' but not 'as const'
+  /\bas\s+(?!const\b)[A-Z]\w*/g,
+  // Match 'as any'
+  /\bas\s+any\b/g,
+  // Match 'as unknown'
+  /\bas\s+unknown\b/g,
+  // Match generic as casts like 'as Array<T>'
+  /\bas\s+[A-Z]\w*\s*</g,
+  // Match parenthesized as casts
+  /\)\s*as\s+[A-Z]\w*/g,
+]
+
+// Exceptions where 'as' might be acceptable
+const ALLOWED_PATTERNS = [
+  // Allow 'as const' for const assertions
+  /\bas\s+const\b/g,
+  // Allow in test files for mocking
+  /\.test\.(ts|tsx)$/,
+  /\.spec\.(ts|tsx)$/,
+  /__tests__/,
+  // Allow in migration scripts (temporary)
+  /scripts\/migrate.*\.ts$/,
+]
+
+// Directories to exclude from checking
+const EXCLUDE_PATHS = [
+  'node_modules', 
+  'dist', 
+  'build', 
+  '.next', 
+  'coverage', 
+  '.git', 
+  'public'
+]
+
+// ============================================================================
+// IMPLEMENTATION - No need to modify below this line
+// ============================================================================
+
 const fs = require('fs')
 const path = require('path')
 const { execSync } = require('child_process')
@@ -19,40 +64,11 @@ const colors = {
   bold: '\x1b[1m',
 }
 
-// Patterns to detect 'as' type assertions
-const AS_CAST_PATTERNS = [
-  // Match 'as Type' but not 'as const'
-  /\bas\s+(?!const\b)[A-Z]\w*/g,
-  // Match 'as any'
-  /\bas\s+any\b/g,
-  // Match 'as unknown'
-  /\bas\s+unknown\b/g,
-  // Match generic as casts like 'as Array<T>'
-  /\bas\s+[A-Z]\w*\s*</g,
-  // Match parenthesized as casts
-  /\)\s*as\s+[A-Z]\w*/g,
-]
-
-// Exceptions where 'as' might be acceptable (can be configured)
-const ALLOWED_PATTERNS = [
-  // Allow 'as const' for const assertions
-  /\bas\s+const\b/g,
-  // Allow in test files for mocking
-  /\.test\.(ts|tsx)$/,
-  /\.spec\.(ts|tsx)$/,
-  /__tests__/,
-  // Allow in migration scripts (temporary)
-  /scripts\/migrate.*\.ts$/,
-]
-
 /**
  * Check if a file path should be excluded
  */
 function shouldExcludeFile(filePath) {
-  // Exclude node_modules, build directories, etc.
-  const excludePaths = ['node_modules', 'dist', 'build', '.next', 'coverage', '.git', 'public']
-
-  return excludePaths.some((exclude) => filePath.includes(exclude))
+  return EXCLUDE_PATHS.some((exclude) => filePath.includes(exclude))
 }
 
 /**
@@ -105,6 +121,22 @@ function findAsCasts(filePath, content) {
   })
 
   return violations
+}
+
+/**
+ * Check a specific file for as casts
+ */
+function checkFileForAsCasts(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return []
+  }
+
+  if (shouldExcludeFile(filePath) || isAllowedFile(filePath)) {
+    return []
+  }
+
+  const content = fs.readFileSync(filePath, 'utf8')
+  return findAsCasts(filePath, content)
 }
 
 /**
@@ -231,12 +263,37 @@ if (isFix) {
 }
 
 // Get files to check
-const files = isFullCheck ? getAllTypeScriptFiles() : getStagedFiles()
+let files
+const specificFiles = args.filter(arg => !arg.startsWith('--') && (arg.endsWith('.ts') || arg.endsWith('.tsx')))
+
+if (specificFiles.length > 0) {
+  // Use specific files provided as arguments
+  files = specificFiles.filter(file => fs.existsSync(file))
+} else if (isFullCheck) {
+  // Check all TypeScript files
+  files = getAllTypeScriptFiles()
+} else {
+  // Check only staged files (for git hooks)
+  files = getStagedFiles()
+}
 
 if (files.length === 0) {
   console.log(`${colors.blue}ℹ️  No TypeScript files to check${colors.reset}`)
   process.exit(0)
 }
 
-// Run validation
-validateFiles(files, !isFullCheck)
+// Run validation (only if called directly)
+if (require.main === module) {
+  validateFiles(files, !isFullCheck)
+}
+
+// Export for use in ESLint plugin
+module.exports = {
+  AS_CAST_PATTERNS,
+  ALLOWED_PATTERNS,
+  EXCLUDE_PATHS,
+  checkFileForAsCasts,
+  findAsCasts,
+  shouldExcludeFile,
+  isAllowedFile
+}

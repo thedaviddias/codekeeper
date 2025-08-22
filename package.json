@@ -1,6 +1,6 @@
 {
   "name": "codekeeper-guardrails",
-  "version": "1.1.0",
+  "version": "1.0.0",
   "description": "Essential guardrails to prevent AI from going sideways in development projects",
   "scripts": {
     "guardrails:check": "node scripts/validation/check-all.js",

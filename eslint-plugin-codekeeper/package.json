@@ -1,6 +1,6 @@
 {
   "name": "@thedaviddias/eslint-plugin-codekeeper",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "ESLint plugin for CodeKeeper AI development guardrails",
   "main": "index.js",
   "keywords": [

@@ -1,0 +1,41 @@
+{
+  "name": "codekeeper-guardrails",
+  "version": "1.0.0",
+  "description": "Essential guardrails to prevent AI from going sideways in development projects",
+  "main": "index.js",
+  "scripts": {
+    "guardrails:check": "node scripts/validation/check-all.js",
+    "guardrails:type-safety": "node scripts/validation/check-as-casts.js --all",
+    "guardrails:imports": "node scripts/validation/check-barrel-files.js && node scripts/validation/check-relative-imports.js",
+    "guardrails:structure": "node scripts/validation/check-directory-structure.js",
+    "guardrails:complexity": "node scripts/validation/check-file-complexity.js --report",
+    "guardrails:docs": "node scripts/validation/check-jsdoc.js",
+    "guardrails:install": "lefthook install",
+    "guardrails:setup": "npm run guardrails:install && echo '✅ Guardrails installed! Run git commit to test.'"
+  },
+  "keywords": [
+    "ai",
+    "guardrails",
+    "code-quality",
+    "typescript",
+    "validation",
+    "git-hooks",
+    "lefthook"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "lefthook": "^1.5.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/codekeeper-guardrails.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/codekeeper-guardrails/issues"
+  },
+  "homepage": "https://github.com/yourusername/codekeeper-guardrails#readme"
+}

@@ -1,0 +1,165 @@
+# CodeKeeper + Lefthook Configuration
+# Each check has a specific purpose - granular and educational approach
+
+pre-commit:
+  parallel: true
+  commands:
+    # Type Safety Checks
+    any-type-check:
+      glob: "*.{ts,tsx}"
+      exclude: "*test* *spec* *mock* *.d.ts"
+      run: |
+        echo "🔍 Checking for unsafe 'any' types..."
+        for file in {staged_files}; do
+          if grep -E ":\s*any([\s,;>\)]|$)" "$file" 2>/dev/null; then
+            echo "❌ COMMIT BLOCKED: Found 'any' types in $file!"
+            echo "💡 Replace 'any' with specific types for better type safety"
+            echo "📋 Example: interface User { name: string; email: string }"
+            exit 1
+          fi
+        done
+        echo "✅ No unsafe 'any' types found"
+
+    as-cast-check:
+      glob: "*.{ts,tsx}"
+      exclude: "*test* *spec* *mock*"
+      run: |
+        echo "🔍 Checking for unsafe type assertions..."
+        if ! node scripts/validation/check-as-casts.js {staged_files}; then
+          echo "❌ COMMIT BLOCKED: Unsafe type assertions found!"
+          echo "💡 Use proper type guards instead of 'as any'"
+          echo "📋 Example: if (typeof data === 'object' && data !== null) { ... }"
+          exit 1
+        fi
+        echo "✅ No unsafe type assertions found"
+
+    # Component Quality Checks
+    component-complexity:
+      glob: "*.{tsx,jsx}"
+      run: |
+        echo "🔍 Checking React component complexity..."
+        if ! node scripts/validation/check-file-complexity.js {staged_files}; then
+          echo "❌ COMMIT BLOCKED: Components exceed complexity limits!"
+          echo "💡 Split large components into smaller, focused ones"
+          echo "📋 Max recommended: 300 lines, 10 functions per component"
+          exit 1
+        fi
+        echo "✅ All components pass complexity checks"
+
+    jsdoc-check:
+      glob: "*.{ts,tsx}"
+      exclude: "*test* *spec* *mock* *.d.ts"
+      run: |
+        echo "📚 Checking JSDoc documentation..."
+        if ! node scripts/validation/check-jsdoc.js {staged_files}; then
+          echo "❌ COMMIT BLOCKED: Missing JSDoc documentation!"
+          echo "💡 Add JSDoc to components and complex functions"
+          echo "📋 Example:"
+          echo "  /**"
+          echo "   * User profile component"
+          echo "   * @param user - User data object"
+          echo "   * @param onUpdate - Callback when user updates"
+          echo "   */"
+          exit 1
+        fi
+        echo "✅ JSDoc documentation check passed"
+
+    # Performance Checks
+    barrel-files-check:
+      run: |
+        echo "🔍 Checking for performance-killing barrel files..."
+        if ! node scripts/validation/check-barrel-files.js; then
+          echo "❌ COMMIT BLOCKED: Barrel files detected!"
+          echo "💡 Use direct imports for better tree-shaking"
+          echo "📋 Replace: import { Button } from './components'"
+          echo "📋 With: import { Button } from './components/Button'"
+          exit 1
+        fi
+        echo "✅ No barrel files found"
+
+    # Next.js Specific Checks
+    server-client-check:
+      glob: "app/**/*.{ts,tsx}"
+      run: |
+        echo "🔍 Checking Server/Client component patterns..."
+        for file in {staged_files}; do
+          # Check for client hooks in server components
+          if [[ "$file" =~ app/.* ]] && ! grep -q "'use client'" "$file" && grep -E "(useState|useEffect|useRouter)" "$file" 2>/dev/null; then
+            echo "❌ COMMIT BLOCKED: Client hooks in Server Component: $file"
+            echo "💡 Add 'use client' directive or move to client component"
+            exit 1
+          fi
+          # Check for server-only patterns in client components  
+          if grep -q "'use client'" "$file" && grep -E "(headers|cookies|unstable_)" "$file" 2>/dev/null; then
+            echo "⚠️  Warning: Server-only APIs in Client Component: $file"
+            echo "💡 Move server logic to Server Component or API route"
+          fi
+        done
+        echo "✅ Server/Client component patterns are correct"
+
+    # Security & Best Practices
+    console-log-check:
+      glob: "*.{js,ts,jsx,tsx}"
+      exclude: "*test* *spec*"
+      run: |
+        echo "🔍 Checking for console statements..."
+        for file in {staged_files}; do
+          if grep -E "console\.(log|error|warn|info)" "$file" 2>/dev/null; then
+            echo "⚠️  Warning: Console statements found in $file"
+            echo "💡 Remove before production or use proper logging"
+          fi
+        done
+
+    # Code Quality & Formatting
+    eslint-check:
+      glob: "*.{js,jsx,ts,tsx}"
+      run: |
+        echo "🧹 Running ESLint with auto-fix..."
+        npx eslint --fix {staged_files}
+      stage_fixed: true
+
+    prettier-format:
+      glob: "*.{js,jsx,ts,tsx,json,css,md}"
+      run: |
+        echo "✨ Formatting code with Prettier..."
+        npx prettier --write {staged_files}
+      stage_fixed: true
+
+pre-push:
+  parallel: true
+  commands:
+    # Full validation before push
+    type-check-full:
+      run: |
+        echo "🔍 Running full TypeScript check..."
+        if ! npx tsc --noEmit; then
+          echo "❌ PUSH BLOCKED: TypeScript errors found!"
+          echo "💡 Fix all TypeScript errors before pushing"
+          exit 1
+        fi
+        echo "✅ TypeScript check passed"
+
+    build-check:
+      run: |
+        echo "🏗️  Testing Next.js build..."
+        if ! npm run build; then
+          echo "❌ PUSH BLOCKED: Next.js build failed!"
+          echo "💡 Fix build errors before pushing"
+          exit 1
+        fi
+        echo "✅ Build successful"
+
+    test-check:
+      run: |
+        echo "🧪 Running tests..."
+        if ! npm test; then
+          echo "❌ PUSH BLOCKED: Tests failed!"
+          echo "💡 Fix failing tests before pushing"
+          exit 1
+        fi
+        echo "✅ All tests passed"
+
+# Skip verbose output for cleaner experience
+skip_output:
+  - meta
+  - summary

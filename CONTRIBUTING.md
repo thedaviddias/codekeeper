@@ -25,23 +25,21 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 ### 🔧 Adding New Guardrails
 
-Want to add a new validation script? Great! Here's how:
+Want to add a new validation rule? We have a comprehensive guide that covers the entire process!
 
+📚 **[See the Complete Guide for Adding New Validation Rules](../docs/CONTRIBUTING-NEW-RULES.md)**
+
+This guide covers:
+- Creating shared validators and standalone scripts
+- Setting up test infrastructure
+- ESLint plugin integration
+- GitHub Actions configuration
+- Documentation requirements
+- Example templates and best practices
+
+For a quick overview:
 1. **Create the validation script** in `scripts/validation/`
-2. **Follow the existing pattern**:
-   ```javascript
-   // check-your-rule.js
-   const RULE_NAME = 'your-rule';
-   const DEFAULT_OPTIONS = {
-     // Your default configuration
-   };
-   
-   function validate(files, options = {}) {
-     // Your validation logic
-   }
-   
-   module.exports = { validate, RULE_NAME };
-   ```
+2. **Follow the existing pattern** from other validation scripts
 3. **Add tests** for your guardrail
 4. **Update the documentation** in README.md
 5. **Add examples** in docs/EXAMPLES.md

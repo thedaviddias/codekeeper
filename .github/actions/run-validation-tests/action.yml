@@ -74,6 +74,7 @@ runs:
           "test:jsdoc"
           "test:complexity"
           "test:structure"
+          "test:console-logs"
         )
         
         for script in "${SCRIPTS[@]}"; do

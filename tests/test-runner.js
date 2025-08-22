@@ -40,6 +40,11 @@ const TESTS = {
     shouldFail: [],
     shouldPass: ['.'], // Current directory should pass
     expectedViolations: 0,
+  },
+  'check-console-logs': {
+    shouldFail: ['tests/fixtures/console-logs/bad-console.tsx'],
+    shouldPass: ['tests/fixtures/console-logs/good-console.tsx'],
+    expectedViolations: 8, // Number of console statements in bad file
   }
 }
 

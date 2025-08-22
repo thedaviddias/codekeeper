@@ -120,6 +120,7 @@ runs:
           "check-jsdoc.js"
           "check-file-complexity.js"
           "check-directory-structure.js"
+          "check-console-logs.js"
         )
         
         MISSING_SCRIPTS=()

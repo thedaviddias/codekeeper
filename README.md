@@ -471,7 +471,11 @@ We welcome contributions! Whether it's:
 2. Add test fixtures for new validation rules
 3. Update documentation if needed
 
-See our [Contributing Guide](./CONTRIBUTING.md) for details.
+### 📚 Contributing Resources
+
+- [Contributing Guide](./CONTRIBUTING.md) - General contribution guidelines
+- [Adding New Validation Rules](./docs/CONTRIBUTING-NEW-RULES.md) - Comprehensive step-by-step guide for adding new rules
+- [Examples](./docs/EXAMPLES.md) - Usage examples and patterns
 
 ## 📊 Stats & Community
 

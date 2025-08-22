@@ -10,6 +10,7 @@ const noUnsafeAsCasts = require('../eslint-plugin-codekeeper/rules/no-unsafe-as-
 const noBarrelFiles = require('../eslint-plugin-codekeeper/rules/no-barrel-files');
 const maxFileComplexity = require('../eslint-plugin-codekeeper/rules/max-file-complexity');
 const requireJsdoc = require('../eslint-plugin-codekeeper/rules/require-jsdoc');
+const noConsoleLogs = require('../eslint-plugin-codekeeper/rules/no-console-logs');
 
 // Mock ESLint context
 function createMockContext(filename, sourceCode) {
@@ -76,7 +77,8 @@ async function runTests() {
     'bad-as-casts.tsx': fs.readFileSync(path.join(__dirname, 'fixtures/bad-as-casts.tsx'), 'utf8'),
     'barrel-file/index.ts': fs.readFileSync(path.join(__dirname, 'fixtures/barrel-file/index.ts'), 'utf8'),
     'complex-file.tsx': fs.readFileSync(path.join(__dirname, 'fixtures/complex-file.tsx'), 'utf8'),
-    'missing-jsdoc.ts': fs.readFileSync(path.join(__dirname, 'fixtures/missing-jsdoc.ts'), 'utf8')
+    'missing-jsdoc.ts': fs.readFileSync(path.join(__dirname, 'fixtures/missing-jsdoc.ts'), 'utf8'),
+    'bad-console.tsx': fs.readFileSync(path.join(__dirname, '../tests/fixtures/console-logs/bad-console.tsx'), 'utf8')
   };
   
   let passed = 0;
@@ -103,6 +105,12 @@ async function runTests() {
   // Test require-jsdoc rule
   total++;
   if (testRule('require-jsdoc', requireJsdoc, 'test-validation/fixtures/missing-jsdoc.ts', fixtures['missing-jsdoc.ts'])) {
+    passed++;
+  }
+  
+  // Test no-console-logs rule
+  total++;
+  if (testRule('no-console-logs', noConsoleLogs, 'tests/fixtures/console-logs/bad-console.tsx', fixtures['bad-console.tsx'])) {
     passed++;
   }
   

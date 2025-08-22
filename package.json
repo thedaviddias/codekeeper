@@ -20,6 +20,7 @@
     "test:file-complexity": "node scripts/validation/check-file-complexity.js tests/fixtures/complexity/complex-file.tsx",
     "test:structure": "node scripts/validation/check-directory-structure.js",
     "test:directory-structure": "node scripts/validation/check-directory-structure.js",
+    "test:console-logs": "node scripts/validation/check-console-logs.js tests/fixtures/console-logs/bad-console.tsx",
     "test:validate": "npm test && echo '✅ All validation scripts are working correctly!'",
     "check:node": "node scripts/check-node-version.js"
   },
